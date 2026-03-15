@@ -1,5 +1,8 @@
 # REON Music App - Deployment Script
-# This script builds and prepares the app for deployment
+# Local build helper for generating release artifacts.
+# Note: Signing configs and credentials must be provided via Gradle
+# configuration (e.g. gradle.properties / environment variables) and
+# should never be hardcoded in this script or committed to version control.
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "REON Music App - Deployment Script" -ForegroundColor Cyan

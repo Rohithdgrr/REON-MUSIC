@@ -261,7 +261,8 @@ class HomeViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val userPreferences: UserPreferences,
     private val historyDao: HistoryDao,
-    private val songDao: SongDao
+    private val songDao: SongDao,
+    private val recommendationDataSource: com.reon.music.data.repository.RecommendationDataSource
 ) : ViewModel() {
     
     companion object {
@@ -429,15 +430,7 @@ class HomeViewModel @Inject constructor(
     
     private suspend fun loadQuickPicks() {
         try {
-            // Get recent history from database - fetch 60 to filter/ensure we have enough unique ones
-            val recentHistory = historyDao.getRecentHistory(60).first()
-            val recentSongIds = recentHistory.map { it.songId }.distinct()
-            
-            // Convert to Songs - fetch up to 30 for the 5x6 grid
-            val recentSongs = recentSongIds.mapNotNull { songId ->
-                songDao.getSongById(songId)?.toSong()
-            }.take(30)
-            
+            val recentSongs = recommendationDataSource.getQuickPicks(limit = 30).first()
             _uiState.value = _uiState.value.copy(quickPicksSongs = recentSongs)
             Log.d(TAG, "Loaded ${recentSongs.size} quick picks for 5x6 grid")
             
@@ -455,8 +448,7 @@ class HomeViewModel @Inject constructor(
     
     private suspend fun loadMostPlayed() {
         try {
-            val mostPlayedSongs = historyDao.getMostPlayedFromHistory(15).first()
-            val songs = mostPlayedSongs.map { it.toSong() }
+            val songs = recommendationDataSource.getMostPlayed(limit = 15).first()
             _uiState.value = _uiState.value.copy(mostPlayedSongs = songs)
             Log.d(TAG, "Loaded ${songs.size} most played songs")
         } catch (e: Exception) {

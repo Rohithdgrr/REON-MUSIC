@@ -1,5 +1,9 @@
 @echo off
 REM REON Music App - Quick Deployment Script
+REM Local build helper for generating release APK/AAB.
+REM Note: Signing configs and credentials must be provided via Gradle
+REM configuration (e.g. gradle.properties / environment variables) and
+REM should never be hardcoded in this script or committed to version control.
 echo ========================================
 echo REON Music App - Quick Deployment
 echo ========================================

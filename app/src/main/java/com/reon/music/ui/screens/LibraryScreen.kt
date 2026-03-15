@@ -95,6 +95,8 @@ fun LibraryScreen(
         }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+
     fun toggleQuickCategory(category: LibraryQuickCategory) {
         selectedQuickCategory = if (selectedQuickCategory == category) {
             LibraryQuickCategory.NONE
@@ -250,15 +252,15 @@ fun LibraryScreen(
             playlist = selectedPlaylist!!,
             onDismiss = { showPlaylistOptions = false },
             onPlay = { 
-                // Play all songs in playlist
+                libraryViewModel.playPlaylist(selectedPlaylist!!.id, playerViewModel, shuffle = false)
                 showPlaylistOptions = false
             },
             onShuffle = { 
-                // Shuffle play playlist
+                libraryViewModel.playPlaylist(selectedPlaylist!!.id, playerViewModel, shuffle = true)
                 showPlaylistOptions = false
             },
             onAddToQueue = { 
-                // Add all songs to queue
+                libraryViewModel.addPlaylistToQueue(selectedPlaylist!!.id, playerViewModel)
                 showPlaylistOptions = false
             },
             onDownload = { 

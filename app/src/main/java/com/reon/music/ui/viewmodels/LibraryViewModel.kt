@@ -243,6 +243,38 @@ class LibraryViewModel @Inject constructor(
             playlistDao.deleteById(playlist.id)
         }
     }
+
+    /**
+     * Load all songs in a playlist as domain models.
+     */
+    suspend fun getPlaylistSongs(playlistId: Long): List<Song> {
+        return playlistDao.getPlaylistSongsOnce(playlistId).map { entity -> entity.toSong() }
+    }
+
+    /**
+     * Play a playlist - starts playback of all songs in the playlist
+     */
+    fun playPlaylist(playlistId: Long, playerViewModel: PlayerViewModel, shuffle: Boolean = false) {
+        viewModelScope.launch {
+            val songs = getPlaylistSongs(playlistId)
+            if (songs.isNotEmpty()) {
+                val songsToPlay = if (shuffle) songs.shuffled() else songs
+                playerViewModel.playQueue(songsToPlay, startIndex = 0)
+            }
+        }
+    }
+
+    /**
+     * Add all songs from a playlist to the queue
+     */
+    fun addPlaylistToQueue(playlistId: Long, playerViewModel: PlayerViewModel) {
+        viewModelScope.launch {
+            val songs = getPlaylistSongs(playlistId)
+            songs.forEach { song ->
+                playerViewModel.addToQueue(song)
+            }
+        }
+    }
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)

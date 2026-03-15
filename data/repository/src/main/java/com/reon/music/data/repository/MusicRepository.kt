@@ -67,6 +67,16 @@ class MusicRepository @Inject constructor(
         
         // Remove duplicates by ID
         val uniqueSongs = songs.distinctBy { it.id }
+            .sortedByDescending { song ->
+                // Boost songs whose movie/album/title closely match the query
+                val q = query.lowercase()
+                var score = 0
+                if (song.movieName.isNotBlank() && song.movieName.lowercase().contains(q)) score += 4
+                if (song.album.isNotBlank() && song.album.lowercase().contains(q)) score += 3
+                if (song.title.lowercase().contains(q)) score += 2
+                if (song.description.lowercase().contains(q)) score += 1
+                score
+            }
         
         if (uniqueSongs.isEmpty()) {
             // Return error if no YouTube results
