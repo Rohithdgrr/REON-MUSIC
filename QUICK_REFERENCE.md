@@ -1,27 +1,44 @@
+<div align="center">
+
 # ⚡ Quick Reference - Search Feature Fixes
+
+<p align="center">
+  <img src="../assets/search.jpeg" width="200" alt="Search Screen" />
+</p>
+
+**Quick guide for the search stability improvements**
+
+[![Status](https://img.shields.io/badge/Status-Complete-brightgreen)](FIXES_IMPLEMENTED.md)
+[![Fixed](https://img.shields.io/badge/Crashes-0%25-brightgreen)](SEARCH_FIX_SUMMARY.md)
+
+</div>
+
+---
 
 ## 🎯 TL;DR
 
-**Problem:** App crashes when searching
-**Solution:** Fixed null safety + added live data streaming
-**Result:** No crashes + real-time results
+| Problem | Solution | Result |
+|---------|----------|--------|
+| App crashes when searching | Fixed null safety + live data streaming | No crashes + real-time results |
 
 ---
 
 ## 🔧 Quick Fix Summary
 
-### Three Files Changed:
+### Three Files Changed
 
-1. **YouTubeMusicClient.kt** - Added null safety in JSON parsing
-2. **MusicRepository.kt** - Added `searchSongsLive()` method  
-3. **SearchViewModel.kt** - Updated to use live streaming
+| # | File | Change |
+|---|------|--------|
+| 1 | `YouTubeMusicClient.kt` | Added null safety in JSON parsing |
+| 2 | `MusicRepository.kt` | Added `searchSongsLive()` method |
+| 3 | `SearchViewModel.kt` | Updated to use live streaming |
 
-### Key Improvements:
+### Key Improvements
 
-✅ **Parse Safety** - Try-catch around each JSON navigation
-✅ **Fallbacks** - Default values for all fields
-✅ **Live Data** - Results stream in real-time
-✅ **Error Handling** - Clear error messages instead of crashes
+- ✅ **Parse Safety** - Try-catch around each JSON navigation
+- ✅ **Fallbacks** - Default values for all fields
+- ✅ **Live Data** - Results stream in real-time
+- ✅ **Error Handling** - Clear error messages instead of crashes
 
 ---
 

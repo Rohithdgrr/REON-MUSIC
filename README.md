@@ -1,18 +1,237 @@
-# REON Music App
+<div align="center">
 
-A comprehensive, feature-rich Android music streaming app built with Kotlin and Jetpack Compose.
+# 🎵 REON Music
+
+<p align="center">
+  <img src="assets/Home%20screen.jpeg" width="200" />
+  <img src="assets/now%20playing%20screen.jpeg" width="200" />
+  <img src="assets/search.jpeg" width="200" />
+</p>
+
+**A beautiful, feature-rich Android music streaming app built with Kotlin & Jetpack Compose**
+
+[![Android](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://www.android.com)
+[![Kotlin](https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![License](https://img.shields.io/badge/License-Proprietary-red)](LICENSE)
+
+[Download APK](#-download) • [Features](#-features) • [Screenshots](#-screenshots) • [Building](#-building)
+
+</div>
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td>
+
+### 🎵 **Playback**
+- Stream from **JioSaavn** & **YouTube Music**
+- Background playback with media controls
+- Gapless playback & crossfade
+- Queue management with shuffle/repeat
+- Sleep timer with fade-out
+
+</td>
+<td>
+
+### 📚 **Library**
+- Offline downloads
+- Playlist management
+- Liked songs collection
+- Listening history
+- Full metadata support
+
+</td>
+</tr>
+<tr>
+<td>
+
+### 🔍 **Search**
+- Global search across sources
+- Search history
+- Filter by type (Songs, Albums, Artists, Playlists)
+- Sort options
+
+</td>
+<td>
+
+### 🎨 **Personalization**
+- 8 beautiful theme presets
+- Dynamic colors from album art
+- Light, Dark & AMOLED modes
+- Custom font families
+- Auto-update content
+
+</td>
+</tr>
+<tr>
+<td>
+
+### 🎬 **Video & Lyrics**
+- Video playback with PiP
+- Quality selection (360p-1080p)
+- Synchronized lyrics (LrcLib)
+- SponsorBlock integration
+
+</td>
+<td>
+
+### 🔒 **Privacy**
+- **FOSS** flavor (no tracking)
+- **Full** flavor (optional crash reporting)
+- Multi-account support
+- YouTube Music sync
+- Cloud sync via Neon PostgreSQL
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/Home%20screen.jpeg" width="250" alt="Home Screen" />
+  &nbsp;&nbsp;
+  <img src="assets/search.jpeg" width="250" alt="Search Screen" />
+  &nbsp;&nbsp;
+  <img src="assets/now%20playing%20screen.jpeg" width="250" alt="Now Playing" />
+</p>
+
+<p align="center">
+  <img src="assets/library.jpeg" width="250" alt="Library" />
+  &nbsp;&nbsp;
+  <img src="assets/downloads.jpeg" width="250" alt="Downloads" />
+  &nbsp;&nbsp;
+  <img src="assets/top%20artist.jpeg" width="250" alt="Top Artists" />
+</p>
+
+<p align="center"><i>Home • Search • Now Playing • Library • Downloads • Top Artists</i></p>
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  📱 UI Layer (Jetpack Compose + Material 3)                  │
+├─────────────────────────────────────────────────────────────┤
+│  • Home • Search • Library • Player • Settings • Downloads   │
+├─────────────────────────────────────────────────────────────┤
+│  🎯 Presentation Layer (MVVM)                                │
+├─────────────────────────────────────────────────────────────┤
+│  • ViewModels • StateFlow • UI State Management              │
+├─────────────────────────────────────────────────────────────┤
+│  📦 Domain Layer                                             │
+├─────────────────────────────────────────────────────────────┤
+│  • Use Cases • Repository Interfaces • Models                │
+├─────────────────────────────────────────────────────────────┤
+│  💾 Data Layer                                               │
+├─────────────────────────────────────────────────────────────┤
+│  Network (Ktor) • Database (Room) • DataStore (Prefs)        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| **Language** | Kotlin |
+| **UI** | Jetpack Compose + Material 3 |
+| **Architecture** | MVVM + Clean Architecture |
+| **DI** | Hilt |
+| **Networking** | Ktor Client |
+| **Database** | Room (local) + Neon PostgreSQL (cloud) |
+| **Playback** | Media3 (ExoPlayer) |
+| **Images** | Coil |
+| **Background** | WorkManager |
+| **Prefs** | DataStore |
+
+---
+
+## 📋 Requirements
+
+- **Android**: 8.0+ (API 26)
+- **Android Studio**: Hedgehog or later
+- **JDK**: 17 or OpenJDK 23
+
+---
+
+## 🚀 Building
+
+### Build Flavors
+
+| Flavor | Description |
+|--------|-------------|
+| `FOSS` | No crash analytics, fully open-source friendly |
+| `Full` | Optional Sentry crash reporting (user consent) |
+
+```bash
+# Build FOSS debug APK
+./gradlew assembleFossDebug
+
+# Build Full debug APK (default)
+./gradlew assembleFullDebug
+
+# Build release APK
+./gradlew assembleFullRelease
+```
+
+### Configuration
+
+Create `local.properties` in project root:
+
+```properties
+sdk.dir=YOUR_ANDROID_SDK_PATH
+```
+
+---
+
+## 📥 Download
+
+Get the latest APK from the releases section (when available).
+
+> **Note**: This is a proprietary project. Distribution is restricted.
+
+---
+
+## 🎨 Theme System
+
+REON Music features a comprehensive theming system:
+
+- **8 Theme Presets**: Classic Green, Ocean Blue, Sunset Orange, Purple Haze, Rose Gold, Forest Green, Midnight Black, Crimson Red
+- **Dynamic Colors**: Extracted from album artwork
+- **Font Customization**: 8 font families with 4 size options
+- **Display Modes**: Light, Dark, AMOLED (pure black)
+
+---
+
+## 🌐 API Integrations
+
+- **JioSaavn API** - Music streaming
+- **YouTube InnerTube** - YouTube Music streaming
+- **LrcLib** - Synchronized lyrics
+- **SponsorBlock** - Skip non-music segments
+- **Return YouTube Dislike** - View like/dislike ratios
+- **Neon PostgreSQL** - Cloud sync
+
+---
 
 ## ⚖️ Legal Notice
 
-**CLEAN-ROOM IMPLEMENTATION**
+### Clean-Room Implementation
 
-This project is an **original, clean-room implementation**. No GPL-licensed code has been copied into this codebase. All code is independently written based on:
+This project is an **original, clean-room implementation**. No GPL-licensed code has been copied. All code is independently written based on:
 
 - Publicly documented Android APIs (Jetpack, Media3, Room, Hilt)
-- Standard cryptographic algorithms (DES) available in Java SDK
+- Standard cryptographic algorithms available in Java SDK
 - Publicly observable API behavior patterns
 
-### Third-Party Dependencies
+### Third-Party Licenses
 
 All dependencies use permissive licenses (Apache 2.0, MIT):
 - Jetpack Compose, Media3, Room, Hilt - Apache 2.0
@@ -20,207 +239,24 @@ All dependencies use permissive licenses (Apache 2.0, MIT):
 - Coil - Apache 2.0
 - Kotlin Serialization - Apache 2.0
 
-## 🏗️ Architecture
-
-Multi-module architecture following clean architecture principles:
-
-```
-app/                    # Main application module
-├── core/
-│   ├── common/        # Shared utilities & Result wrapper
-│   ├── model/         # Data models (Song, Album, Artist, Playlist)
-│   └── ui/            # Common UI components
-├── data/
-│   ├── network/       # API clients (JioSaavn, YouTube, LrcLib, SponsorBlock, RYD)
-│   ├── database/      # Room database with DAOs
-│   └── repository/    # Data repositories
-├── media/
-│   └── playback/      # Media3 playback service
-└── feature/
-    ├── home/          # Home screen
-    ├── search/        # Search screen
-    ├── player/        # Now playing screen
-    ├── library/       # Library screen
-    └── settings/      # Settings screen
-```
-
-## 🚀 Features
-
-### Core Playback
-- 🎵 Stream music from **JioSaavn** and **YouTube Music**
-- 🎨 Beautiful Material 3 UI with **dynamic theming** (album art colors)
-- 📱 Background playback with media controls
-- 🎯 Gapless playback and crossfade
-- 🔄 Queue management with shuffle and repeat
-- ⏰ Sleep timer with fade-out
-
-### Library & Organization
-- 💾 Offline downloads with background worker
-- 📋 Create and manage playlists
-- ❤️ Liked songs collection
-- 📊 Listening history and statistics
-- 🎼 Full metadata support (lyrics, album art, artist info)
-
-### Enhanced Search
-- 🔍 Global search across JioSaavn and YouTube
-- 📝 Search history
-- 🏷️ Filter by type (All, Songs, Albums, Artists, Playlists)
-- 🔢 Sort options (Relevance, Duration, Title, Date)
-
-### Audio Features
-- 🎚️ Audio equalizer with presets and custom band control
-- 🎬 Video playback with Picture-in-Picture (PiP) mode
-- 📺 Quality selection (360p, 720p, 1080p)
-- 📝 Synchronized lyrics support (LrcLib integration)
-- ⏩ **SponsorBlock** integration for auto-skipping segments
-
-### Privacy & Customization
-- 🔒 **Two build flavors**: FOSS (no tracking) and Full (optional crash reporting)
-- 👤 Multi-account management with isolated preferences
-- 🌙 Light, Dark, and AMOLED themes
-- 🎨 Dynamic color theming from album artwork
-- 🔄 YouTube Music bi-directional sync (playlists, liked songs, history)
-
-### Cloud & Sync
-- ☁️ Neon PostgreSQL cloud sync for cross-device library
-- 🔄 YouTube Music integration (view likes/dislikes via RYD API)
-- 📊 Statistics and "REON Wrapped" style analytics
-
-### Android Integration
-- 🚗 **Android Auto** support with MediaBrowserService
-- 🎵 Audio format support: MP3, AAC/M4A, Opus, WebM
-- 💾 Smart cache management (audio, images, lyrics)
-
-## 🛠️ Tech Stack
-
-- **Language**: Kotlin
-- **UI**: Jetpack Compose + Material 3
-- **Architecture**: MVVM with Clean Architecture
-- **DI**: Hilt + Dagger
-- **Networking**: Ktor Client
-- **Database**: Room (local) + Neon PostgreSQL (cloud sync)
-- **Playback**: Media3 (ExoPlayer)
-- **Image Loading**: Coil
-- **Background Tasks**: WorkManager
-- **Preferences**: DataStore
-- **Serialization**: kotlinx.serialization
-
-## 📋 Requirements
-
-- Android 8.0 (API 26) or higher
-- Android Studio Hedgehog or later
-- JDK 17 or OpenJDK 23
-
-## 🏃 Building
-
-### Build Flavors
-
-The app has two product flavors:
-- **FOSS**: No crash analytics, fully open-source friendly
-- **Full**: Optional Sentry crash reporting (user consent required)
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/reon-music.git
-
-# Build FOSS debug APK
-./gradlew assembleFossDebug
-
-# Build Full debug APK (default)
-./gradlew assembleFullDebug
-
-# Build release APK with signing
-./gradlew assembleFullRelease
-```
-
-### Configuration
-
-Create `local.properties` in the project root:
-```properties
-sdk.dir=YOUR_ANDROID_SDK_PATH
-```
-
-For production builds, configure signing in `gradle.properties` or via environment variables.
-
-## 🗂️ Database Schema
-
-### Local Database (Room)
-- `songs` - Song metadata and playback info
-- `playlists` - User-created playlists
-- `playlist_songs` - Playlist-song relationships
-- `listen_history` - Play history with timestamps
-- `artists` - Artist information
-- `albums` - Album metadata
-- `lyrics` - Cached lyrics
-
-### Cloud Sync (Neon PostgreSQL)
-- Bi-directional sync for library, playlists, and settings
-- Conflict resolution with last-write-wins strategy
-- OAuth-based authentication (planned)
-
-## 📱 Screens
-
-1. **Home** - Quick access, recommendations, recently played
-2. **Search** - Global search with filters and history
-3. **Library** - Liked songs, playlists, downloads, history
-4. **Now Playing** - Full-screen player with lyrics
-5. **Settings** - App preferences, themes, account management
-
-## 🎨 Theming
-
-- Light theme (default)
-- Dark theme
-- AMOLED black theme
-- Dynamic theming from album artwork (uses Palette API)
-
-## 🔐 Privacy
-
-### FOSS Version
-- ✅ No crash analytics
-- ✅ No tracking or telemetry
-- ✅ No third-party data collection
-- ✅ Fully transparent data handling
-
-### Full Version
-- ⚠️ Optional Sentry crash reporting (requires user consent)
-- ✅ No tracking or advertising
-- ✅ User data stays local or in user-controlled Neon database
-- ✅ YouTube sync only with explicit user permission
-
-## 🌐 API Integrations
-
-- **JioSaavn API**: Music streaming (undocumented public API)
-- **YouTube InnerTube**: YouTube Music streaming
-- **LrcLib**: Synchronized lyrics fetching
-- **SponsorBlock**: Skip non-music segments
-- **Return YouTube Dislike**: View like/dislike ratios
-- **Neon PostgreSQL**: Cloud database for sync
-
-## 📄 License
-
-This project is proprietary software. All rights reserved.
+---
 
 ## ⚠️ Disclaimer
 
 This app is for **educational purposes** only. Users must:
-- Have proper licensing agreements for any copyrighted music content
-- Respect the terms of service of third-party APIs
-- Not use this app to infringe on any copyrights
+- Have proper licensing agreements for copyrighted content
+- Respect third-party API terms of service
+- Not use this app to infringe on copyrights
 
-The developers do not endorse or encourage piracy in any form.
-
-## 🤝 Contributing
-
-This is a closed-source project. Contributions are not currently accepted.
-
-## 📧 Contact
-
-For inquiries: [your-email@example.com]
+The developers do not endorse or encourage piracy.
 
 ---
 
+<div align="center">
+
 **Built with ❤️ using Kotlin and Jetpack Compose**
 
-**Last Updated**: December 2024
-**Version**: 1.0.0
-**Build Status**: ✅ Passing (assembleFullDebug)
+*Last Updated: March 2026*
+
+</div>
+

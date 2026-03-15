@@ -1,7 +1,18 @@
+<div align="center">
+
 # 🖼️ Thumbnail Loading Optimization - Complete Implementation
 
-## Overview
-Comprehensive optimization of thumbnail loading for high-quality, fast performance across the music app.
+<p align="center">
+  <img src="assets/Home%20screen.jpeg" width="200" alt="Home Screen" />
+  <img src="assets/now%20playing%20screen.jpeg" width="200" alt="Now Playing" />
+</p>
+
+**Comprehensive optimization of thumbnail loading for high-quality, fast performance**
+
+[![Status](https://img.shields.io/badge/Status-Complete-brightgreen)]()
+[![Performance](https://img.shields.io/badge/Performance-Optimized-blue)]()
+
+</div>
 
 ---
 

@@ -1,30 +1,29 @@
+<div align="center">
+
 # 🖼️ Thumbnail Loading - Quick Reference
 
-## What Was Done
+<p align="center">
+  <img src="assets/Home%20screen.jpeg" width="200" alt="Home Screen" />
+  <img src="assets/now%20playing%20screen.jpeg" width="200" alt="Now Playing" />
+</p>
 
-✅ **Highest Quality Thumbnails** - All thumbnails now use 1920x1080 maxresdefault
-✅ **Fast Loading** - 5.3x faster with aggressive caching (512MB memory + 256MB disk)
-✅ **Smart Sizing** - Different quality tiers for different UI contexts
-✅ **Better UX** - Shimmer placeholders while loading, smooth crossfades
-✅ **Network Optimized** - Connection pooling with 8 parallel downloads
+**Quick reference for thumbnail optimization improvements**
+
+[![Status](https://img.shields.io/badge/Status-Complete-brightgreen)](THUMBNAIL_OPTIMIZATION.md)
+[![Performance](https://img.shields.io/badge/Speed-5.3x%20faster-blue)]()
+
+</div>
 
 ---
 
-## 📊 Before vs After
+## What Was Done
 
-```
-BEFORE:
-├─ Thumbnails: 60-120px (blurry)
-├─ First load: ~800ms
-├─ Cache: None (redownload every time)
-└─ Network: Sequential (slow)
-
-AFTER:
-├─ Thumbnails: 1920x1080 (crystal clear)
-├─ First load: ~150ms (5.3x faster)
-├─ Cache: 512MB memory + 256MB disk (instant repeat loads)
-└─ Network: 8 parallel connections (faster)
-```
+| Feature | Before | After |
+|---------|--------|-------|
+| Quality | 60-120px | 1920x1080 maxresdefault |
+| Loading | ~800ms | ~150ms (5.3x faster) |
+| Cache | None | 512MB memory + 256MB disk |
+| Network | Sequential | 8 parallel downloads |
 
 ---
 

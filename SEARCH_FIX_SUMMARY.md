@@ -1,6 +1,22 @@
-# Search Feature Crash Fix & Live Data Implementation
+<div align="center">
+
+# 🔍 Search Feature Crash Fix & Live Data Implementation
+
+<p align="center">
+  <img src="assets/search.jpeg" width="200" alt="Search Screen" />
+</p>
+
+**Fixed critical crash issues in the search feature and implemented live data streaming**
+
+[![Status](https://img.shields.io/badge/Status-Fixed-brightgreen)](FIXES_IMPLEMENTED.md)
+[![Crashes](https://img.shields.io/badge/Crashes-0%25-brightgreen)]()
+
+</div>
+
+---
 
 ## Overview
+
 Fixed critical crash issues in the search feature that were causing NullPointerExceptions and implemented live data streaming for real-time search results.
 
 ## Issues Fixed
