@@ -1,8 +1,0 @@
-{
-  "projectId": "0f2c7fc7-9c92-48bd-a6e4-f7919fce0c3e",
-  "createdAt": 1734612445000,
-  "startupCommands": [
-    "gradlew.bat --status",
-    "gradlew.bat help"
-  ]
-}
