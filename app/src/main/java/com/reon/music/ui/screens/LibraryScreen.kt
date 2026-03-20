@@ -1,7 +1,7 @@
 /*
- * REON Music App - SimpMusic-Inspired Library Screen
+ * REON Music App - Library Screen
  * Copyright (c) 2024 REON
- * Modern, Clean Design with Red Palette Light Theme
+ * Light Purple Theme with Pastel Category Cards
  */
 
 package com.reon.music.ui.screens
@@ -19,13 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -36,29 +35,33 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Song
 import com.reon.music.data.database.entities.PlaylistEntity
-import com.reon.music.ui.viewmodels.LibraryTab
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.playback.PlayerState
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
-import com.reon.music.ui.theme.*
-import com.reon.music.ui.navigation.ReonDestination
-import androidx.navigation.NavOptions
 import com.reon.music.services.DownloadStatus
+import java.text.SimpleDateFormat
+import java.util.*
 
-// SimpMusic Color Palette
-private val BackgroundWhite = Color(0xFFFFFFFF)
-private val SurfaceLight = Color(0xFFF8F9FA)
-private val TextPrimary = Color(0xFF1A1A1A)
-private val TextSecondary = Color(0xFF666666)
-private val AccentRed = Color(0xFFE53935)
+// Light Purple Theme Colors
+private val BackgroundPurple = Color(0xFFF5F0FF)
+private val SurfacePurple = Color(0xFFFFFFFF)
+private val TextPrimary = Color(0xFF1A1A2E)
+private val TextSecondary = Color(0xFF6B6B7B)
+private val AccentPurple = Color(0xFF8B5CF6)
 
-// Category colors from theme
-private val CategoryFavorite = Color(0xFFFFB3D9)     // Pink
-private val CategoryFollowed = Color(0xFFFFD54F)     // Yellow
-private val CategoryMostPlayed = Color(0xFF4DD0E1)   // Cyan
-private val CategoryDownloaded = Color(0xFF81C784)   // Green
+// Category colors - Pastel theme
+private val CategoryFavorite = Color(0xFFFFD6E0)     // Light Pink
+private val CategoryFollowed = Color(0xFFFFF4B8)     // Light Yellow
+private val CategoryMostPlayed = Color(0xFFC8E6FF)    // Light Blue
+private val CategoryHistory = Color(0xFFB8FFD6)      // Light Green
+
+// Icon colors
+private val IconPink = Color(0xFFFF6B9D)
+private val IconYellow = Color(0xFFFFB946)
+private val IconBlue = Color(0xFF4A90D9)
+private val IconGreen = Color(0xFF50C878)
 
 private enum class LibraryQuickCategory { NONE, FAVORITES, FOLLOWED, MOST_PLAYED, HISTORY }
 
@@ -95,8 +98,6 @@ fun LibraryScreen(
         }
     }
 
-    val coroutineScope = rememberCoroutineScope()
-
     fun toggleQuickCategory(category: LibraryQuickCategory) {
         selectedQuickCategory = if (selectedQuickCategory == category) {
             LibraryQuickCategory.NONE
@@ -117,51 +118,79 @@ fun LibraryScreen(
                     )
                 },
                 actions = {
-                    Spacer(modifier = Modifier.width(4.dp))
+                    // No actions needed - time/battery removed
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BackgroundWhite
-                )
+                    containerColor = BackgroundPurple
+                ),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
             )
         },
         floatingActionButton = {
-            // Show FAB only in overview
-            FloatingActionButton(
-                onClick = { libraryViewModel.showCreatePlaylistDialog() },
-                containerColor = AccentRed,
-                contentColor = Color.White
+            // Purple gradient FAB
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFA78BFA),
+                                Color(0xFF8B5CF6)
+                            )
+                        )
+                    )
+                    .clickable { libraryViewModel.showCreatePlaylistDialog() },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Playlist")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Create Playlist",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         },
-        containerColor = BackgroundWhite
+        containerColor = BackgroundPurple
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .background(BackgroundPurple)
         ) {
-            // Search Bar
+            // Search Bar - Rounded with light background
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search in library") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                placeholder = { 
+                    Text(
+                        "Search in library",
+                        color = TextSecondary.copy(alpha = 0.6f)
+                    ) 
+                },
+                leadingIcon = { 
+                    Icon(
+                        Icons.Default.Search, 
+                        contentDescription = null,
+                        tint = TextSecondary
+                    ) 
+                },
                 trailingIcon = if (searchQuery.isNotEmpty()) {
                     {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
                         }
                     }
                 } else null,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(25.dp),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = SurfaceLight,
+                    containerColor = SurfacePurple,
                     unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = AccentRed.copy(alpha = 0.5f)
+                    focusedBorderColor = AccentPurple.copy(alpha = 0.5f)
                 ),
                 singleLine = true
             )
@@ -178,15 +207,7 @@ fun LibraryScreen(
                 },
                 selectedQuickCategory = selectedQuickCategory,
                 onQuickCategorySelected = { selected ->
-                    when (selected) {
-                        LibraryQuickCategory.HISTORY -> {
-                            // Show history inline instead of navigating to a possibly missing route
-                            toggleQuickCategory(selected)
-                        }
-                        else -> {
-                            toggleQuickCategory(selected)
-                        }
-                    }
+                    toggleQuickCategory(selected)
                 },
                 onQuickCategoryClear = { selectedQuickCategory = LibraryQuickCategory.NONE },
                 onPlaylistClick = { playlist ->
@@ -264,7 +285,6 @@ fun LibraryScreen(
                 showPlaylistOptions = false
             },
             onDownload = { 
-                // Download playlist
                 showPlaylistOptions = false
             },
             onDelete = { 
@@ -331,7 +351,7 @@ private fun QuickCategoryHeader(
             )
         }
         TextButton(onClick = onClear) {
-            Text("Close", color = AccentRed)
+            Text("Close", color = AccentPurple)
         }
     }
 }
@@ -366,7 +386,7 @@ private fun QuickSongList(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceLight)
+            .background(SurfacePurple)
     ) {
         songs.forEachIndexed { index, song ->
             LibrarySongRow(
@@ -381,7 +401,7 @@ private fun QuickSongList(
                 onMoreClick = { onSongMoreClick(song) }
             )
             if (index < songs.lastIndex) {
-                HorizontalDivider(color = BackgroundWhite.copy(alpha = 0.4f))
+                HorizontalDivider(color = BackgroundPurple.copy(alpha = 0.4f))
             }
         }
     }
@@ -412,12 +432,12 @@ private fun QuickPlaylistList(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceLight)
+            .background(SurfacePurple)
     ) {
         playlists.forEachIndexed { index, playlist ->
             QuickPlaylistRow(playlist = playlist, onClick = { onPlaylistClick(playlist) })
             if (index < playlists.lastIndex) {
-                HorizontalDivider(color = BackgroundWhite.copy(alpha = 0.4f))
+                HorizontalDivider(color = BackgroundPurple.copy(alpha = 0.4f))
             }
         }
     }
@@ -457,7 +477,7 @@ private fun LibrarySongRow(
                 text = song.title,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isPlaying) AccentRed else TextPrimary,
+                color = if (isPlaying) AccentPurple else TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -475,13 +495,13 @@ private fun LibrarySongRow(
                         progress = (downloadProgress.coerceIn(0, 100) / 100f),
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
-                        color = AccentRed
+                        color = AccentPurple
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${downloadProgress.coerceIn(0, 100)}%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AccentRed
+                        color = AccentPurple
                     )
                 }
             } else if (isDownloaded) {
@@ -490,14 +510,14 @@ private fun LibrarySongRow(
                     Icon(
                         imageVector = Icons.Filled.DownloadDone,
                         contentDescription = "Downloaded",
-                        tint = AccentRed,
+                        tint = AccentPurple,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Offline",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AccentRed
+                        color = AccentPurple
                     )
                 }
             }
@@ -530,7 +550,7 @@ private fun QuickPlaylistRow(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(AccentRed.copy(alpha = 0.85f)),
+                .background(AccentPurple.copy(alpha = 0.85f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -593,48 +613,52 @@ private fun LibraryOverviewContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     CategoryCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.Favorite,
                         title = "Favorites",
+                        subtitle = "${uiState.likedSongs.size} songs",
                         backgroundColor = CategoryFavorite,
-                        iconColor = Color(0xFFD32F2F),
+                        iconColor = IconPink,
                         onClick = { onQuickCategorySelected(LibraryQuickCategory.FAVORITES) }
                     )
                     CategoryCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.PlaylistAdd,
+                        icon = Icons.Default.Bookmark,
                         title = "Followed",
+                        subtitle = "${uiState.playlists.size} playlists",
                         backgroundColor = CategoryFollowed,
-                        iconColor = Color(0xFFFBC02D),
+                        iconColor = IconYellow,
                         onClick = { onQuickCategorySelected(LibraryQuickCategory.FOLLOWED) }
                     )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     CategoryCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.ShowChart,
+                        icon = Icons.Default.TrendingUp,
                         title = "Most Played",
+                        subtitle = "${uiState.mostPlayed.size} songs",
                         backgroundColor = CategoryMostPlayed,
-                        iconColor = Color(0xFF00ACC1),
+                        iconColor = IconBlue,
                         onClick = { onQuickCategorySelected(LibraryQuickCategory.MOST_PLAYED) }
                     )
                     CategoryCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.History,
                         title = "History",
-                        backgroundColor = CategoryDownloaded,
-                        iconColor = Color(0xFF43A047),
+                        subtitle = "${uiState.recentlyPlayed.size} songs",
+                        backgroundColor = CategoryHistory,
+                        iconColor = IconGreen,
                         onClick = { onQuickCategorySelected(LibraryQuickCategory.HISTORY) }
                     )
                 }
@@ -709,36 +733,36 @@ private fun LibraryOverviewContent(
             }
         }
 
-        // Recently Added Section
+        // Recently Played Section - Horizontal row
         if (uiState.recentlyPlayed.isNotEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
             
             item {
                 Text(
-                    text = "Recently Added",
-                    style = MaterialTheme.typography.headlineSmall.copy(
+                    text = "Recently Played",
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
                     color = TextPrimary,
-                    modifier = Modifier.padding(vertical = 12.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
             
-            itemsIndexed(uiState.recentlyPlayed.take(15)) { index, item ->
-                RecentlyAddedItem(
-                    item = item,
-                    isPlaying = playerState.currentSong?.id == item.id,
-                    onClick = { onSongClick(item) },
-                    onMoreClick = { onSongMoreClick(item) }
-                )
-                if (index < uiState.recentlyPlayed.take(15).size - 1) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = SurfaceLight,
-                        thickness = 0.5.dp
-                    )
+            item {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(uiState.recentlyPlayed.take(10)) { song ->
+                        RecentlyPlayedItem(
+                            song = song,
+                            isPlaying = playerState.currentSong?.id == song.id,
+                            onClick = { onSongClick(song) }
+                        )
+                    }
                 }
             }
         }
@@ -754,53 +778,58 @@ private fun CategoryCard(
     modifier: Modifier = Modifier,
     icon: ImageVector,
     title: String,
+    subtitle: String,
     backgroundColor: Color,
     iconColor: Color,
     onClick: () -> Unit
 ) {
     Card(
         modifier = modifier
-            .height(120.dp)
+            .height(110.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(16.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = iconColor.copy(alpha = 0.15f),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = iconColor,
-                        modifier = Modifier.size(28.dp)
+            // Icon at top-left
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(
+                        color = iconColor.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+                    .align(Alignment.TopStart),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            
+            // Title and subtitle at bottom-left
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold
                     ),
-                    color = TextPrimary,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    color = TextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextSecondary
                 )
             }
         }
@@ -860,6 +889,74 @@ private fun CompactCategoryCard(
 }
 
 @Composable
+private fun RecentlyPlayedItem(
+    song: Song,
+    isPlaying: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(100.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Square album art with rounded corners
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SurfacePurple)
+        ) {
+            AsyncImage(
+                model = song.getHighQualityArtwork(),
+                contentDescription = song.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(AccentPurple.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Song title
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        // Artist name
+        Text(
+            text = song.artist,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
 private fun RecentlyAddedItem(
     item: Any,
     isPlaying: Boolean,
@@ -871,7 +968,7 @@ private fun RecentlyAddedItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isPlaying) AccentRed.copy(alpha = 0.08f) else Color.Transparent)
+                    .background(if (isPlaying) AccentPurple.copy(alpha = 0.08f) else Color.Transparent)
                     .clickable(onClick = onClick)
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -881,7 +978,7 @@ private fun RecentlyAddedItem(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(SurfaceLight)
+                        .background(SurfacePurple)
                 ) {
                     AsyncImage(
                         model = (item as Song).getHighQualityArtwork(),
@@ -893,13 +990,13 @@ private fun RecentlyAddedItem(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(AccentRed.copy(alpha = 0.15f)),
+                                .background(AccentPurple.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                tint = AccentRed,
+                                tint = AccentPurple,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -911,7 +1008,7 @@ private fun RecentlyAddedItem(
                         text = (item as Song).title,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isPlaying) AccentRed else TextPrimary,
+                        color = if (isPlaying) AccentPurple else TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -927,7 +1024,7 @@ private fun RecentlyAddedItem(
                         Text(
                             text = (item as Song).album,
                             style = MaterialTheme.typography.labelSmall,
-                            color = AccentRed.copy(alpha = 0.6f),
+                            color = AccentPurple.copy(alpha = 0.6f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -957,7 +1054,7 @@ private fun RecentlyAddedItem(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(SurfaceLight),
+                        .background(SurfacePurple),
                     contentAlignment = Alignment.Center
                 ) {
                     if ((item as PlaylistEntity).thumbnailUrl != null) {
@@ -1095,7 +1192,7 @@ private fun PlaylistItem(
             modifier = Modifier
                 .size(56.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceLight),
+                .background(SurfacePurple),
             contentAlignment = Alignment.Center
         ) {
             if (playlist.thumbnailUrl != null) {
@@ -1154,7 +1251,7 @@ private fun SongListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isPlaying) AccentRed.copy(alpha = 0.1f) else Color.Transparent)
+            .background(if (isPlaying) AccentPurple.copy(alpha = 0.1f) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1175,7 +1272,7 @@ private fun SongListItem(
                 text = song.title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = if (isPlaying) AccentRed else TextPrimary,
+                color = if (isPlaying) AccentPurple else TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1191,7 +1288,7 @@ private fun SongListItem(
                 Text(
                     text = "Album: ${song.album}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentRed.copy(alpha = 0.7f),
+                    color = AccentPurple.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1259,7 +1356,7 @@ private fun LibrarySongOptionsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = BackgroundWhite
+        containerColor = SurfacePurple
     ) {
         Column(
             modifier = Modifier
@@ -1301,7 +1398,7 @@ private fun LibrarySongOptionsSheet(
                 }
             }
             
-            HorizontalDivider(color = SurfaceLight)
+            HorizontalDivider(color = BackgroundPurple)
             
             // Options
             OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
@@ -1310,14 +1407,14 @@ private fun LibrarySongOptionsSheet(
             OptionMenuItem(icon = Icons.Outlined.Download, title = "Download", onClick = onDownload)
             OptionMenuItem(icon = Icons.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
             
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SurfaceLight)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
             
             OptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
             OptionMenuItem(
                 icon = Icons.Default.RemoveCircleOutline,
                 title = "Remove from Library",
                 onClick = onRemoveFromLibrary,
-                tint = AccentRed
+                tint = AccentPurple
             )
         }
     }
@@ -1337,7 +1434,7 @@ private fun PlaylistOptionsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = BackgroundWhite
+        containerColor = SurfacePurple
     ) {
         Column(
             modifier = Modifier
@@ -1355,7 +1452,7 @@ private fun PlaylistOptionsSheet(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(SurfaceLight),
+                        .background(BackgroundPurple),
                     contentAlignment = Alignment.Center
                 ) {
                     if (playlist.thumbnailUrl != null) {
@@ -1392,7 +1489,7 @@ private fun PlaylistOptionsSheet(
                 }
             }
             
-            HorizontalDivider(color = SurfaceLight)
+            HorizontalDivider(color = BackgroundPurple)
             
             // Options
             OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play All", onClick = onPlay)
@@ -1400,14 +1497,14 @@ private fun PlaylistOptionsSheet(
             OptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
             OptionMenuItem(icon = Icons.Outlined.Download, title = "Download", onClick = onDownload)
             
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SurfaceLight)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
             
             OptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
             OptionMenuItem(
                 icon = Icons.Default.Delete,
                 title = "Delete Playlist",
                 onClick = onDelete,
-                tint = AccentRed
+                tint = AccentPurple
             )
         }
     }
@@ -1467,8 +1564,8 @@ private fun CreatePlaylistDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentRed,
-                        cursorColor = AccentRed
+                        focusedBorderColor = AccentPurple,
+                        cursorColor = AccentPurple
                     )
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1478,8 +1575,8 @@ private fun CreatePlaylistDialog(
                     label = { Text("Description (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentRed,
-                        cursorColor = AccentRed
+                        focusedBorderColor = AccentPurple,
+                        cursorColor = AccentPurple
                     )
                 )
             }
@@ -1493,7 +1590,7 @@ private fun CreatePlaylistDialog(
                     }
                 },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple)
             ) {
                 Text("Create")
             }

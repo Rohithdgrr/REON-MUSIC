@@ -197,6 +197,7 @@ fun ReonApp(
                     ) {
                         composable(ReonDestination.Home.route) {
                             HomeScreen(
+                                navController = navController,
                                 playerViewModel = playerViewModel,
                                 onSettingsClick = {
                                     navController.navigate(ReonDestination.Settings.route)
@@ -216,6 +217,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Search.route) {
                             SearchScreen(
+                                navController = navController,
                                 modifier = Modifier,
                                 onNavigateToPlayer = { song ->
                                     playerViewModel.playSong(song)
@@ -229,6 +231,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Artists.route) {
                             ArtistsScreenEnhanced(
+                                navController = navController,
                                 onNavigateToHome = {
                                     navController.navigate(ReonDestination.Home.route) {
                                         popUpTo(ReonDestination.Home.route) { inclusive = true }
@@ -254,6 +257,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Downloads.route) {
                             DownloadsScreen(
+                                navController = navController,
                                 playerViewModel = playerViewModel
                             )
                         }

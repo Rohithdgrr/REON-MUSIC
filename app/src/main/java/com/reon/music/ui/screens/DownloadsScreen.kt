@@ -1,7 +1,7 @@
 /*
- * REON Music App - Simplified Downloads Screen
+ * REON Music App - Downloads Screen
  * Copyright (c) 2024 REON
- * Shows only downloaded songs for offline playback
+ * Light Purple Theme Design
  */
 
 package com.reon.music.ui.screens
@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,276 +21,227 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Song
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
-import android.content.Intent
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.platform.LocalContext
-import com.reon.music.data.database.entities.PlaylistEntity
-import com.reon.music.ui.viewmodels.SettingsViewModel
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import java.text.SimpleDateFormat
+import java.util.*
 
-// White Background Color Palette
-private val BackgroundWhite = Color(0xFFFFFFFF)
-private val SurfaceLight = Color(0xFFF8F9FA)
-private val TextPrimary = Color(0xFF1A1A1A)
-private val TextSecondary = Color(0xFF666666)
-private val AccentRed = Color(0xFFE53935)
-private val AccentGreen = Color(0xFF43A047)
-private val AccentOrange = Color(0xFFFF9800)
+// Light Purple Theme Colors (matching LibraryScreen)
+private val BackgroundPurple = Color(0xFFF5F0FF)
+private val SurfacePurple = Color(0xFFFFFFFF)
+private val TextPrimary = Color(0xFF1A1A2E)
+private val TextSecondary = Color(0xFF6B6B7B)
+private val AccentPurple = Color(0xFF8B5CF6)
+private val LightPurple = Color(0xFFE9D5FF)
 
-// Using global DownloadStatus from services
+private enum class DownloadsTab { ALL_SONGS, BY_ARTIST, BY_ALBUM }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
+    navController: NavHostController,
     libraryViewModel: LibraryViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel(),
-    settingsViewModel: SettingsViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val playerState by playerViewModel.playerState.collectAsState()
-    val settingsState by settingsViewModel.uiState.collectAsState()
     
-    val context = LocalContext.current
-    
-    // Tab state for grouping
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("All Songs", "By Artist", "By Album")
-    
-    // Song options state
+    var selectedTab by remember { mutableStateOf(DownloadsTab.ALL_SONGS) }
     var showSongOptions by remember { mutableStateOf(false) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
-    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     
-    // Search state
-    var searchQuery by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
+    val downloadedSongs = uiState.downloadedSongs
     
-    // Filter downloaded songs based on tab and search
-    // Note: downloadedSongs from LibraryViewModel already filters for downloadState = 2 (DOWNLOADED)
-    val filteredSongs = remember(uiState.downloadedSongs, selectedTab, searchQuery) {
-        val filtered = if (searchQuery.isEmpty()) {
-            uiState.downloadedSongs
-        } else {
-            uiState.downloadedSongs.filter { song ->
-                song.title.contains(searchQuery, ignoreCase = true) ||
-                song.artist.contains(searchQuery, ignoreCase = true) ||
-                song.album.contains(searchQuery, ignoreCase = true)
-            }
-        }
-        
+    val filteredSongs = remember(downloadedSongs, selectedTab) {
         when (selectedTab) {
-            1 -> filtered.sortedBy { it.artist }
-            2 -> filtered.sortedBy { it.album }
-            else -> filtered
+            DownloadsTab.ALL_SONGS -> downloadedSongs
+            DownloadsTab.BY_ARTIST -> downloadedSongs.sortedBy { it.artist }
+            DownloadsTab.BY_ALBUM -> downloadedSongs.sortedBy { it.album }
         }
     }
     
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
     Scaffold(
         topBar = {
-            if (showSearch) {
-                SearchTopBar(
-                    searchQuery = searchQuery,
-                    onSearchQueryChanged = { searchQuery = it },
-                    onCloseSearch = { 
-                        showSearch = false
-                        searchQuery = ""
-                    }
-                )
-            } else {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Downloads",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { /* Navigate back */ }) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = TextPrimary
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showSearch = true }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Search,
-                                contentDescription = "Search",
-                                tint = TextPrimary
-                            )
-                        }
-                        // Radio mode button
-                        if (uiState.downloadedSongs.isNotEmpty()) {
-                            IconButton(onClick = { 
-                                playerViewModel.enableRadioMode(uiState.downloadedSongs)
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Radio,
-                                    contentDescription = "Radio Mode",
-                                    tint = AccentRed
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = BackgroundWhite
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Downloads",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
                     )
-                )
-            }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TextPrimary
+                        )
+                    }
+                },
+                actions = {
+                    // No actions needed - time/battery removed
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = BackgroundPurple
+                ),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+            )
         },
-        containerColor = BackgroundWhite
+        containerColor = BackgroundPurple
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .background(BackgroundPurple)
         ) {
-            if (uiState.downloadedSongs.isEmpty()) {
+            if (downloadedSongs.isEmpty()) {
                 EmptyDownloadsState()
             } else {
-                // Tab Row for grouping
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = BackgroundWhite,
-                    contentColor = AccentRed,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.Indicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = AccentRed,
-                            height = 3.dp
-                        )
-                    }
+                // Tab Row - Pill style
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTab == index) AccentRed else TextSecondary
-                                )
-                            }
-                        )
-                    }
+                    TabPill(
+                        text = "All Songs",
+                        isSelected = selectedTab == DownloadsTab.ALL_SONGS,
+                        onClick = { selectedTab = DownloadsTab.ALL_SONGS },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TabPill(
+                        text = "By Artist",
+                        isSelected = selectedTab == DownloadsTab.BY_ARTIST,
+                        onClick = { selectedTab = DownloadsTab.BY_ARTIST },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TabPill(
+                        text = "By Album",
+                        isSelected = selectedTab == DownloadsTab.BY_ALBUM,
+                        onClick = { selectedTab = DownloadsTab.BY_ALBUM },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
                 
                 // Play All / Shuffle Buttons
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Button(
-                        onClick = { 
-                            if (filteredSongs.isNotEmpty()) {
-                                playerViewModel.playQueue(filteredSongs)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Play All")
-                    }
-                    OutlinedButton(
-                        onClick = { 
-                            if (filteredSongs.isNotEmpty()) {
-                                playerViewModel.playQueue(filteredSongs.shuffled())
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed)
-                    ) {
-                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Shuffle")
-                    }
-                }
-                
-                // Downloads List or Empty State
-                if (filteredSongs.isEmpty()) {
+                    // Play All Button - Purple gradient
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFFA78BFA)
+                                    )
+                                )
+                            )
+                            .clickable { 
+                                if (filteredSongs.isNotEmpty()) {
+                                    playerViewModel.playQueue(filteredSongs)
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No downloads match your search",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                    }
-                } else {
-                    // Group songs by artist if needed
-                    val groupedSongs = remember(filteredSongs, selectedTab) {
-                        when (selectedTab) {
-                            1 -> filteredSongs.groupBy { it.artist }
-                            2 -> filteredSongs.groupBy { it.album }
-                            else -> mapOf("" to filteredSongs)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Play All",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                     
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    // Shuffle Button - Light purple background
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(SurfacePurple)
+                            .clickable { 
+                                if (filteredSongs.isNotEmpty()) {
+                                    playerViewModel.playQueue(filteredSongs.shuffled())
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        groupedSongs.forEach { (group, songs) ->
-                            if (group.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        text = group,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = AccentRed,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                            
-                            itemsIndexed(songs) { index, song ->
-                                DownloadItem(
-                                    song = song,
-                                    isPlaying = playerState.currentSong?.id == song.id,
-                                    onClick = { playerViewModel.playSong(song) },
-                                    onMoreClick = {
-                                        selectedSong = song
-                                        showSongOptions = true
-                                    }
-                                )
-                                if (index < songs.size - 1) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 76.dp),
-                                        color = SurfaceLight,
-                                        thickness = 0.5.dp
-                                    )
-                                }
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = null,
+                                tint = AccentPurple,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Shuffle",
+                                color = AccentPurple,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
+                    }
+                }
+                
+                // Song List
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(filteredSongs) { index, song ->
+                        DownloadSongItem(
+                            song = song,
+                            isPlaying = playerState.currentSong?.id == song.id,
+                            onClick = { playerViewModel.playSong(song) },
+                            onMoreClick = {
+                                selectedSong = song
+                                showSongOptions = true
+                            }
+                        )
+                    }
+                    
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
                         
-                        item {
-                            Spacer(modifier = Modifier.height(100.dp))
-                        }
+                        // Storage Indicator
+                        StorageIndicator(
+                            downloadedCount = downloadedSongs.size,
+                            totalStorage = "128 MB"
+                        )
+                        
+                        Spacer(modifier = Modifier.height(100.dp))
                     }
                 }
             }
@@ -314,173 +264,199 @@ fun DownloadsScreen(
                     playerViewModel.addToQueue(selectedSong!!)
                     showSongOptions = false
                 },
-                onAddToPlaylist = { 
-                    showAddToPlaylistDialog = true
-                    showSongOptions = false
-                },
                 onRemoveDownload = { 
                     libraryViewModel.removeDownload(selectedSong!!)
                     showSongOptions = false
                 },
                 onShare = { 
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, "Listen to ${selectedSong!!.title} by ${selectedSong!!.artist}")
+                    val sendIntent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        putExtra(android.content.Intent.EXTRA_TEXT, "Listen to ${selectedSong!!.title} by ${selectedSong!!.artist}")
                         type = "text/plain"
                     }
-                    context.startActivity(Intent.createChooser(sendIntent, "Share Song"))
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Song"))
                     showSongOptions = false
                 }
             )
         }
-        
-        // Add to Playlist Dialog
-        if (showAddToPlaylistDialog && selectedSong != null) {
-            AddToPlaylistDialog(
-                playlists = uiState.playlists,
-                onDismiss = { showAddToPlaylistDialog = false },
-                onPlaylistSelected = { playlist ->
-                    libraryViewModel.addToPlaylist(playlist.id, selectedSong!!)
-                    showAddToPlaylistDialog = false
-                }
-            )
-        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchTopBar(
-    searchQuery: String,
-    onSearchQueryChanged: (String) -> Unit,
-    onCloseSearch: () -> Unit
+private fun TabPill(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var focusRequester = FocusRequester()
-    
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-    
-    TopAppBar(
-        title = {
-            TextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChanged,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                placeholder = { Text("Search downloads...", color = TextSecondary) },
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                )
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onCloseSearch) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Close Search",
-                    tint = TextPrimary
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = BackgroundWhite
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isSelected) AccentPurple else SurfacePurple)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Color.White else TextSecondary
         )
-    )
+    }
 }
 
 @Composable
-private fun DownloadItem(
+private fun DownloadSongItem(
     song: Song,
     isPlaying: Boolean,
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isPlaying) AccentRed.copy(alpha = 0.08f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = SurfacePurple
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        // Album art thumbnail
-        Box(
+        Row(
             modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(SurfaceLight)
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            AsyncImage(
-                model = song.getHighQualityArtwork(),
-                contentDescription = song.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            // Playing indicator
-            if (isPlaying) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(AccentRed.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = AccentRed,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+            // Music note icon in purple rounded square
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF8B5CF6),
+                                Color(0xFFA78BFA)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
-        }
-        
-        // Song info
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isPlaying) AccentRed else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            // Show album/movie name if available
-            if (song.album.isNotBlank()) {
+            
+            // Song info
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = song.album,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AccentRed.copy(alpha = 0.6f),
+                    text = song.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (song.album.isNotBlank()) {
+                    Text(
+                        text = song.album,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentPurple.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            
+            // More options button
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(BackgroundPurple)
+                    .clickable(onClick = onMoreClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More",
+                    tint = AccentPurple,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
-        
-        // More options
-        IconButton(
-            onClick = onMoreClick,
-            modifier = Modifier.size(40.dp)
+    }
+}
+
+@Composable
+private fun StorageIndicator(
+    downloadedCount: Int,
+    totalStorage: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "More Options",
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Storage,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Storage",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                }
+                
+                Text(
+                    text = "$downloadedCount / 8 songs",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AccentPurple
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Progress bar
+            LinearProgressIndicator(
+                progress = { downloadedCount / 8f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = AccentPurple,
+                trackColor = LightPurple
             )
         }
     }
@@ -494,13 +470,12 @@ private fun DownloadSongOptionsSheet(
     onPlay: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
-    onAddToPlaylist: () -> Unit,
     onRemoveDownload: () -> Unit,
     onShare: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = BackgroundWhite
+        containerColor = SurfacePurple
     ) {
         Column(
             modifier = Modifier
@@ -520,7 +495,7 @@ private fun DownloadSongOptionsSheet(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -542,22 +517,21 @@ private fun DownloadSongOptionsSheet(
                 }
             }
             
-            HorizontalDivider(color = SurfaceLight)
+            HorizontalDivider(color = BackgroundPurple)
             
             // Options
             OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
             OptionMenuItem(icon = Icons.Default.PlaylistAdd, title = "Play Next", onClick = onPlayNext)
             OptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
-            OptionMenuItem(icon = Icons.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
             
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SurfaceLight)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
             
             OptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
             OptionMenuItem(
                 icon = Icons.Default.Delete,
                 title = "Remove Download",
                 onClick = onRemoveDownload,
-                tint = AccentRed
+                tint = AccentPurple
             )
         }
     }
@@ -605,14 +579,14 @@ private fun EmptyDownloadsState() {
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .background(AccentRed.copy(alpha = 0.1f), shape = CircleShape),
+                .background(AccentPurple.copy(alpha = 0.1f), shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Download,
                 contentDescription = null,
                 modifier = Modifier.size(60.dp),
-                tint = AccentRed
+                tint = AccentPurple
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -634,69 +608,13 @@ private fun EmptyDownloadsState() {
         OutlinedButton(
             onClick = { /* Navigate to home to download */ },
             modifier = Modifier.align(Alignment.CenterHorizontally),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
-            border = BorderStroke(1.5.dp, AccentRed)
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentPurple),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentPurple)
         ) {
             Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Browse & Download")
         }
     }
-}
-
-@Composable
-private fun AddToPlaylistDialog(
-    playlists: List<PlaylistEntity>,
-    onDismiss: () -> Unit,
-    onPlaylistSelected: (PlaylistEntity) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to Playlist") },
-        text = {
-            if (playlists.isEmpty()) {
-                Text(
-                    text = "No playlists found.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 300.dp)
-                ) {
-                    items(playlists) { playlist ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onPlaylistSelected(playlist) }
-                                .padding(horizontal = 8.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.QueueMusic,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = playlist.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = TextPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-        containerColor = BackgroundWhite,
-        titleContentColor = TextPrimary,
-        textContentColor = TextPrimary
-    )
 }
 
