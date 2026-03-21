@@ -109,6 +109,18 @@ sealed class ReonDestination(
         }
     }
     
+    // Album Detail Screen
+    data object AlbumDetail : ReonDestination(
+        route = "album/{albumName}/{artistName}",
+        title = "Album",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    ) {
+        fun createRoute(albumName: String, artistName: String): String {
+            return "album/${java.net.URLEncoder.encode(albumName, "UTF-8")}/${java.net.URLEncoder.encode(artistName, "UTF-8")}"
+        }
+    }
+    
     data object FeaturedPlaylists : ReonDestination(
         route = "featured_playlists",
         title = "Featured Playlists",

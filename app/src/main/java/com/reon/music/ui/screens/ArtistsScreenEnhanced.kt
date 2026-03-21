@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.reon.music.ui.navigation.ReonDestination
 import coil.compose.AsyncImage
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Song
@@ -57,7 +58,11 @@ private val LANGUAGE_FILTERS = listOf("All", "Telugu", "Hindi", "Tamil", "Englis
 fun ArtistsScreenEnhanced(
     navController: NavHostController? = null,
     onNavigateToHome: () -> Unit = {},
-    onArtistClick: (Artist) -> Unit = {},
+    onArtistClick: (Artist) -> Unit = { artist ->
+        navController?.navigate(
+            ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
+        )
+    },
     onSongClick: (Song) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel()
@@ -184,7 +189,8 @@ fun ArtistsScreenEnhanced(
                     SuggestedArtistItem(
                         artist = artist,
                         onClick = { onArtistClick(artist) },
-                        onFollowClick = { /* Handle follow */ }
+                        onFollowClick = { /* Handle follow */ },
+                        homeViewModel = homeViewModel
                     )
                 }
             }
@@ -447,8 +453,28 @@ private fun TopArtistsSection(
 private fun SuggestedArtistItem(
     artist: Artist,
     onClick: () -> Unit,
-    onFollowClick: () -> Unit
+    onFollowClick: () -> Unit,
+    homeViewModel: HomeViewModel = hiltViewModel()
 ) {
+    var realImageUrl by remember { mutableStateOf<String?>(null) }
+    var isLoadingImage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(artist.name) {
+        isLoadingImage = true
+        try {
+            val results = homeViewModel.searchSongsForChart("${artist.name} official channel", 5)
+            val channelSong = results.firstOrNull {
+                it.artist.contains(artist.name, ignoreCase = true) ||
+                    it.channelName.contains(artist.name, ignoreCase = true)
+            }
+            realImageUrl = channelSong?.artworkUrl ?: artist.artworkUrl
+        } catch (e: Exception) {
+            realImageUrl = artist.artworkUrl
+        } finally {
+            isLoadingImage = false
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -465,7 +491,7 @@ private fun SuggestedArtistItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Artist avatar
+            // Artist avatar (real image or fallback)
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -477,14 +503,23 @@ private fun SuggestedArtistItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = artist.name.take(2).uppercase(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                if (realImageUrl != null && !isLoadingImage) {
+                    AsyncImage(
+                        model = realImageUrl,
+                        contentDescription = artist.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = artist.name.take(2).uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
-            
+
             // Artist info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -496,12 +531,26 @@ private fun SuggestedArtistItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${artist.topSongs.size} songs",
+                    text = if (artist.topSongs.isNotEmpty()) {
+                        val sample = artist.topSongs.take(3)
+                        val durationTexts = sample.mapNotNull { song ->
+                            if (song.duration > 0) song.formattedDuration() else null
+                        }
+                        if (durationTexts.isNotEmpty()) {
+                            "${artist.topSongs.size} songs • ${durationTexts.joinToString(", ")}"
+                        } else {
+                            "${artist.topSongs.size} songs"
+                        }
+                    } else {
+                        "No songs"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            
+
             // Follow button
             OutlinedButton(
                 onClick = onFollowClick,

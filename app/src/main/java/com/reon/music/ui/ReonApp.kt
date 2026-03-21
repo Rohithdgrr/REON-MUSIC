@@ -62,6 +62,7 @@ import com.reon.music.ui.screens.PlaylistDetailScreen
 import com.reon.music.ui.screens.PreferencesScreen
 import com.reon.music.ui.screens.SearchScreen
 import com.reon.music.ui.screens.SettingsScreen
+import com.reon.music.ui.screens.AlbumDetailScreen
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.net.URLDecoder
 
@@ -375,8 +376,42 @@ fun ReonApp(
                                 onSongClick = { song: Song ->
                                     playerViewModel.playSong(song)
                                 },
+                                onAlbumClick = { album ->
+                                    navController.navigate(
+                                        ReonDestination.AlbumDetail.createRoute(
+                                            albumName = album.name,
+                                            artistName = album.artist
+                                        )
+                                    )
+                                },
                                 onNavigateToArtistPage = { id: String ->
                                     // Already on artist page
+                                }
+                            )
+                        }
+
+                        composable(
+                            route = ReonDestination.AlbumDetail.route,
+                            arguments = listOf(
+                                navArgument("albumName") { type = NavType.StringType },
+                                navArgument("artistName") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val albumName = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("albumName") ?: "Album",
+                                "UTF-8"
+                            )
+                            val artistName = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("artistName") ?: "",
+                                "UTF-8"
+                            )
+
+                            AlbumDetailScreen(
+                                albumName = albumName,
+                                artistName = artistName,
+                                onBackClick = { navController.popBackStack() },
+                                onSongClick = { song: Song ->
+                                    playerViewModel.playSong(song)
                                 }
                             )
                         }
