@@ -109,6 +109,13 @@ sealed class ReonDestination(
         }
     }
     
+    data object FeaturedPlaylists : ReonDestination(
+        route = "featured_playlists",
+        title = "Featured Playlists",
+        selectedIcon = Icons.Filled.Home,
+        unselectedIcon = Icons.Outlined.Home
+    )
+    
     // Favorites Screen
     data object Favorites : ReonDestination(
         route = "favorites",

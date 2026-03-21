@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,6 +36,7 @@ import coil.compose.AsyncImage
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
+import com.reon.music.ui.viewmodels.Genre
 import com.reon.music.ui.viewmodels.HomeViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.text.SimpleDateFormat
@@ -57,6 +61,162 @@ private fun getGreeting(): String {
         in 12..16 -> "Good afternoon"
         in 17..20 -> "Good evening"
         else -> "Good night"
+    }
+
+}
+
+@Composable
+private fun LastListenedGrid(
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit
+) {
+    val rows = ((songs.size + 3) / 4).coerceAtMost(4)
+    val itemHeight = 64.dp
+    val verticalSpacing = 10.dp
+    val gridHeight = (itemHeight * rows.toFloat()) + (verticalSpacing * (rows - 1).coerceAtLeast(0).toFloat())
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(gridHeight)
+            .padding(horizontal = 16.dp),
+        userScrollEnabled = false,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(verticalSpacing)
+    ) {
+        items(songs) { song ->
+            LastListenedGridItem(
+                song = song,
+                onClick = { onSongClick(song) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LastListenedGridItem(
+    song: Song,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(64.dp)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(AccentPurple, IconPink)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (song.artworkUrl != null) {
+                    AsyncImage(
+                        model = song.artworkUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenresRow(
+    genres: List<Genre>,
+    onGenreClick: (Genre) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(genres) { genre ->
+            GenreChip(
+                genre = genre,
+                onClick = { onGenreClick(genre) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenreChip(
+    genre: Genre,
+    onClick: () -> Unit
+) {
+    val accent = Color(genre.accentColor)
+    Card(
+        modifier = Modifier
+            .height(42.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(21.dp),
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.12f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp)
+                .fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = genre.name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -147,28 +307,36 @@ fun HomeScreen(
             contentPadding = PaddingValues(bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Quick Actions Row
-            item {
-                QuickActionsRow(
-                    onLibraryClick = onNavigateToLibrary,
-                    onFavoritesClick = { /* Navigate to favorites */ },
-                    onDownloadsClick = { /* Navigate to downloads */ },
-                    onHistoryClick = { /* Navigate to history */ }
-                )
-            }
-            
-            // Recently Played Section
+            // Last Listened (4x4 Grid)
             if (uiState.recentlyPlayedSongs.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Recently Played",
+                        title = "Last Listened",
                         onSeeAllClick = { onSeeAllClick("recently-played") }
                     )
                 }
                 item {
-                    RecentlyPlayedRow(
-                        songs = uiState.recentlyPlayedSongs.take(10),
+                    LastListenedGrid(
+                        songs = uiState.recentlyPlayedSongs.take(16),
                         onSongClick = onSongClick
+                    )
+                }
+            }
+
+            // Genres Section
+            if (uiState.genres.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Genres",
+                        onSeeAllClick = { onSeeAllClick("genres") }
+                    )
+                }
+                item {
+                    GenresRow(
+                        genres = uiState.genres.take(12),
+                        onGenreClick = { genre ->
+                            onChartClick("genre-${genre.id}", genre.name)
+                        }
                     )
                 }
             }
@@ -263,7 +431,7 @@ fun HomeScreen(
                 }
                 item {
                     PlaylistsRow(
-                        playlists = uiState.featuredPlaylists.take(10),
+                        playlists = uiState.featuredPlaylists.take(20),
                         onPlaylistClick = onPlaylistClick
                     )
                 }

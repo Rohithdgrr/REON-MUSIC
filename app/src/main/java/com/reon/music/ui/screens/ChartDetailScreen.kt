@@ -109,6 +109,8 @@ fun ChartDetailScreen(
             
             // User curated
             "recent" -> uiState.recentlyPlayedSongs
+            "quick-picks" -> uiState.quickPicksSongs
+            "recommended" -> uiState.quickPicksSongs
             "new" -> uiState.newReleases
             "alltimefavorite" -> uiState.allTimeFavorites
             "mostlistening" -> uiState.mostListeningSongs
@@ -685,12 +687,12 @@ private fun ChartHeader(
                 Button(
                     onClick = onShuffleClick,
                     modifier = Modifier
-                        .weight(1.1f)
-                        .height(56.dp),
+                        .weight(1f)
+                        .height(52.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF3B82F6) // Bright blue
+                        containerColor = AccentBlue
                     ),
-                    shape = RoundedCornerShape(28.dp)
+                    shape = RoundedCornerShape(26.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
@@ -698,14 +700,15 @@ private fun ChartHeader(
                         modifier = Modifier.size(20.dp),
                         tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         "Shuffle",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        ),
-                        color = Color.White
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
@@ -713,12 +716,12 @@ private fun ChartHeader(
                 Button(
                     onClick = onPlayClick,
                     modifier = Modifier
-                        .weight(1.1f)
-                        .height(56.dp),
+                        .weight(1f)
+                        .height(52.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF222222)
+                        containerColor = TextPrimary
                     ),
-                    shape = RoundedCornerShape(28.dp)
+                    shape = RoundedCornerShape(26.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
@@ -726,46 +729,47 @@ private fun ChartHeader(
                         modifier = Modifier.size(22.dp),
                         tint = Color.White
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         "Play All",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        ),
-                        color = Color.White
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
-                // Download Button (Large Red Vertical-style)
-                Button(
+                // Download Button
+                OutlinedButton(
                     onClick = onDownloadAllClick,
                     modifier = Modifier
-                        .width(72.dp)
-                        .height(96.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFEF4444) // Bright red
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.White,
+                        contentColor = AccentRed
                     ),
-                    shape = RoundedCornerShape(24.dp),
-                    contentPadding = PaddingValues(0.dp)
+                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(AccentRed.copy(alpha = 0.6f))
+                    )
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download All",
-                            modifier = Modifier.size(32.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(4.dp)
-                                .background(Color.White, CircleShape)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download All",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Download",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -930,7 +934,7 @@ private fun ChartSongItem(
         
         // Duration
         Text(
-            text = song.formattedDuration(),
+            text = if (song.duration > 0) song.formattedDuration() else "--:--",
             style = MaterialTheme.typography.bodySmall,
             color = TextSecondary
         )
