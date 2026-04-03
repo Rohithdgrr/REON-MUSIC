@@ -1234,6 +1234,9 @@ private fun SongInfoDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        titleContentColor = TextPrimary,
+        textContentColor = TextPrimary,
         title = { 
             Text(
                 "Song Information", 
@@ -1242,10 +1245,18 @@ private fun SongInfoDialog(
             ) 
         },
         text = {
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
                 // Song artwork
                 if (song.artworkUrl != null) {
                     Box(
@@ -1271,10 +1282,34 @@ private fun SongInfoDialog(
                 
                 InfoRow("Title", song.title)
                 InfoRow("Artist/Singer", if (song.artist.isNotBlank()) song.artist else "Unknown")
+                InfoRow(
+                    "Playlist",
+                    song.extras["playlistName"]
+                        ?: song.extras["playlist"]
+                        ?: "Unknown"
+                )
                 
                 if (song.album.isNotBlank()) {
                     InfoRow("Album", song.album)
+                } else {
+                    InfoRow("Album", "Unknown")
                 }
+
+                InfoRow(
+                    "Movie",
+                    song.movieName.takeIf { it.isNotBlank() }
+                        ?: song.extras["movieName"]
+                        ?: song.extras["movie"]
+                        ?: "Unknown"
+                )
+
+                InfoRow(
+                    "Genre (Category)",
+                    song.genre.takeIf { it.isNotBlank() }
+                        ?: song.extras["category"]
+                        ?: song.extras["genre"]
+                        ?: "Unknown"
+                )
                 
                 val durationText = if (song.duration > 0) {
                     val minutes = song.duration / 60
@@ -1397,21 +1432,19 @@ private fun SongInfoDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // === DESCRIPTION SECTION ===
-                if (song.description.isNotBlank()) {
-                    SectionHeader("Description")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = song.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary.copy(alpha = 0.8f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+                SectionHeader("Description")
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = song.description.takeIf { it.isNotBlank() } ?: "Not available",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextPrimary.copy(alpha = 0.85f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 // === IDs & LINKS SECTION ===
                 SectionHeader("IDs & Links")
@@ -1444,6 +1477,7 @@ private fun SongInfoDialog(
                             InfoRow(key.replaceFirstChar { it.uppercase() }, value)
                         }
                     }
+                }
                 }
             }
         },

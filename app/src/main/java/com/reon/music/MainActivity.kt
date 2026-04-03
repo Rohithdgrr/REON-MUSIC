@@ -7,6 +7,9 @@
 package com.reon.music
 
 import android.os.Bundle
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen with 2-second delay
         val splashScreen = installSplashScreen()
+
         var keepSplashOnScreen = true
         
         // Keep splash screen visible for 2 seconds
@@ -44,7 +48,14 @@ class MainActivity : ComponentActivity() {
         
         super.onCreate(savedInstanceState)
         
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()
+
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.statusBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
         
         setContent {
             ReonApp()

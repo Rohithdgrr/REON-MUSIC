@@ -43,6 +43,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.reon.music.core.model.Artist
+import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
 import com.reon.music.ui.components.MiniPlayer
 import com.reon.music.ui.components.ReonBottomNavigation
@@ -53,6 +54,7 @@ import com.reon.music.ui.screens.ArtistDetailScreenRedesigned
 import com.reon.music.ui.screens.ArtistsScreenEnhanced
 import com.reon.music.ui.screens.ChartDetailScreen
 import com.reon.music.ui.screens.DownloadsScreen
+import com.reon.music.ui.screens.FeaturedPlaylistsScreen
 import com.reon.music.ui.screens.HomeScreen
 import com.reon.music.ui.screens.LibraryScreen
 import com.reon.music.ui.screens.NowPlayingScreen
@@ -60,6 +62,7 @@ import com.reon.music.ui.screens.PlaylistDetailScreen
 import com.reon.music.ui.screens.PreferencesScreen
 import com.reon.music.ui.screens.SearchScreen
 import com.reon.music.ui.screens.SettingsScreen
+import com.reon.music.ui.screens.AlbumDetailScreen
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.net.URLDecoder
 
@@ -197,9 +200,87 @@ fun ReonApp(
                     ) {
                         composable(ReonDestination.Home.route) {
                             HomeScreen(
+                                navController = navController,
                                 playerViewModel = playerViewModel,
                                 onSettingsClick = {
                                     navController.navigate(ReonDestination.Settings.route)
+                                },
+                                onSeeAllClick = { sectionKey ->
+                                    when (sectionKey) {
+                                        "recently-played" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "recent",
+                                                    chartTitle = "Recently Played"
+                                                )
+                                            )
+                                        }
+
+                                        "quick-picks" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "quick-picks",
+                                                    chartTitle = "Quick Picks"
+                                                )
+                                            )
+                                        }
+
+                                        "recommended" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "recommended",
+                                                    chartTitle = "Recommended For You"
+                                                )
+                                            )
+                                        }
+
+                                        "telugu" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "telugu",
+                                                    chartTitle = "Telugu Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "hindi" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "hindi",
+                                                    chartTitle = "Hindi Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "tamil" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "tamil",
+                                                    chartTitle = "Tamil Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "new" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "new",
+                                                    chartTitle = "New Releases"
+                                                )
+                                            )
+                                        }
+
+                                        "artists" -> navController.navigate(ReonDestination.Artists.route)
+                                        "playlists" -> navController.navigate(ReonDestination.FeaturedPlaylists.route)
+                                        "charts" -> navController.navigate(
+                                            ReonDestination.ChartDetail.createRoute(
+                                                chartType = "chart",
+                                                chartTitle = "Top Charts"
+                                            )
+                                        )
+
+                                        else -> Unit
+                                    }
                                 },
                                 onArtistClick = { artist ->
                                     navController.navigate(
@@ -216,6 +297,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Search.route) {
                             SearchScreen(
+                                navController = navController,
                                 modifier = Modifier,
                                 onNavigateToPlayer = { song ->
                                     playerViewModel.playSong(song)
@@ -229,6 +311,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Artists.route) {
                             ArtistsScreenEnhanced(
+                                navController = navController,
                                 onNavigateToHome = {
                                     navController.navigate(ReonDestination.Home.route) {
                                         popUpTo(ReonDestination.Home.route) { inclusive = true }
@@ -254,6 +337,7 @@ fun ReonApp(
                         
                         composable(ReonDestination.Downloads.route) {
                             DownloadsScreen(
+                                navController = navController,
                                 playerViewModel = playerViewModel
                             )
                         }
@@ -292,8 +376,42 @@ fun ReonApp(
                                 onSongClick = { song: Song ->
                                     playerViewModel.playSong(song)
                                 },
+                                onAlbumClick = { album ->
+                                    navController.navigate(
+                                        ReonDestination.AlbumDetail.createRoute(
+                                            albumName = album.name,
+                                            artistName = album.artist
+                                        )
+                                    )
+                                },
                                 onNavigateToArtistPage = { id: String ->
                                     // Already on artist page
+                                }
+                            )
+                        }
+
+                        composable(
+                            route = ReonDestination.AlbumDetail.route,
+                            arguments = listOf(
+                                navArgument("albumName") { type = NavType.StringType },
+                                navArgument("artistName") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val albumName = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("albumName") ?: "Album",
+                                "UTF-8"
+                            )
+                            val artistName = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("artistName") ?: "",
+                                "UTF-8"
+                            )
+
+                            AlbumDetailScreen(
+                                albumName = albumName,
+                                artistName = artistName,
+                                onBackClick = { navController.popBackStack() },
+                                onSongClick = { song: Song ->
+                                    playerViewModel.playSong(song)
                                 }
                             )
                         }
@@ -342,6 +460,20 @@ fun ReonApp(
                                 onBackClick = { navController.popBackStack() },
                                 onSongClick = { song ->
                                     playerViewModel.playSong(song)
+                                }
+                            )
+                        }
+
+                        composable(ReonDestination.FeaturedPlaylists.route) {
+                            FeaturedPlaylistsScreen(
+                                onBackClick = { navController.popBackStack() },
+                                onPlaylistClick = { playlist: Playlist ->
+                                    navController.navigate(
+                                        ReonDestination.PlaylistDetail.createRoute(
+                                            playlistId = playlist.id,
+                                            playlistTitle = playlist.name
+                                        )
+                                    )
                                 }
                             )
                         }

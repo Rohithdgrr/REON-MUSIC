@@ -119,16 +119,61 @@ fun ArtistDetailScreenRedesigned(
     
     // Songs
     var allArtistSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var artistAlbums by remember { mutableStateOf<List<Album>>(emptyList()) }
+    var movieSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var concertSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var artistPlaylists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
+
+    val tabTitles = remember {
+        listOf("Songs", "Albums", "Movie Songs", "Concert")
+    }
+    var selectedTabIndex by remember { mutableStateOf(0) }
     
     LaunchedEffect(artist.name) {
-        val initialSongs = (uiState.quickPicksSongs + uiState.newReleases + uiState.hindiSongs + 
-             uiState.teluguSongs + uiState.englishSongs + uiState.tamilSongs + uiState.punjabiSongs)
+        val initialSongs = (uiState.quickPicksSongs + uiState.newReleases + uiState.hindiSongs +
+            uiState.teluguSongs + uiState.englishSongs + uiState.tamilSongs + uiState.punjabiSongs)
             .filter { it.artist.contains(artist.name, ignoreCase = true) }
             .distinctBy { it.id }
-        allArtistSongs = initialSongs
-        
-        // Load playlists
+
+        val fetchedSongs = try {
+            homeViewModel.searchSongsForChart("${artist.name} songs", 120)
+                .filter { it.artist.contains(artist.name, ignoreCase = true) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val merged = (initialSongs + fetchedSongs).distinctBy { it.id }
+        allArtistSongs = merged
+
+        movieSongs = merged.filter { song ->
+            song.movieName.isNotBlank() ||
+                song.extras["movieName"]?.isNotBlank() == true
+        }
+
+        concertSongs = merged.filter { song ->
+            val t = song.title.lowercase()
+            val d = song.description.lowercase()
+            t.contains("live") || t.contains("concert") || t.contains("performance") ||
+                d.contains("live") || d.contains("concert")
+        }
+
+        artistAlbums = merged
+            .filter { it.album.isNotBlank() }
+            .groupBy { it.album.trim().lowercase() }
+            .mapNotNull { (key, songs) ->
+                if (key.isBlank() || songs.isEmpty()) return@mapNotNull null
+                val rep = songs.first()
+                Album(
+                    id = key.hashCode().toString(),
+                    name = rep.album,
+                    artist = artist.name,
+                    artworkUrl = rep.artworkUrl,
+                    songCount = songs.size,
+                    songs = songs
+                )
+            }
+            .sortedByDescending { it.songCount }
+
         try {
             artistPlaylists = homeViewModel.searchPlaylistsForArtist(artist.name)
         } catch (e: Exception) { }
@@ -195,25 +240,152 @@ fun ArtistDetailScreenRedesigned(
                 )
             }
             
-            // Popular Songs Section
-            if (allArtistSongs.isNotEmpty()) {
-                item {
-                    ClaySectionTitle(title = "Popular")
-                }
-                
-                itemsIndexed(allArtistSongs.take(10)) { index, song ->
-                    ClayArtistSongItem(
-                        index = index + 1,
-                        song = song,
-                        onClick = { onSongClick(song) },
-                        onInfoClick = {
-                            selectedSongForInfo = song
-                            showSongInfoDialog = true
-                        }
-                    )
+            // Tabs
+            item {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = ClayBackground,
+                    contentColor = AccentBlue,
+                    edgePadding = 20.dp
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        )
+                    }
                 }
             }
-            
+
+            when (selectedTabIndex) {
+                0 -> {
+                    if (allArtistSongs.isNotEmpty()) {
+                        item {
+                            ClaySectionTitle(title = "All Songs")
+                        }
+
+                        itemsIndexed(allArtistSongs) { index, song ->
+                            ClayArtistSongItem(
+                                index = index + 1,
+                                song = song,
+                                onClick = { onSongClick(song) },
+                                onInfoClick = {
+                                    selectedSongForInfo = song
+                                    showSongInfoDialog = true
+                                }
+                            )
+                        }
+                    } else {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "Loading songs...", color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                1 -> {
+                    if (artistAlbums.isNotEmpty()) {
+                        item {
+                            ClaySectionTitle(title = "Albums")
+                        }
+
+                        items(artistAlbums) { album ->
+                            ClayAlbumRow(
+                                album = album,
+                                onClick = { onAlbumClick(album) }
+                            )
+                        }
+                    } else {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "No albums found", color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    if (movieSongs.isNotEmpty()) {
+                        item {
+                            ClaySectionTitle(title = "Movie Songs")
+                        }
+
+                        itemsIndexed(movieSongs) { index, song ->
+                            ClayArtistSongItem(
+                                index = index + 1,
+                                song = song,
+                                onClick = { onSongClick(song) },
+                                onInfoClick = {
+                                    selectedSongForInfo = song
+                                    showSongInfoDialog = true
+                                }
+                            )
+                        }
+                    } else {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "No movie songs found", color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                3 -> {
+                    if (concertSongs.isNotEmpty()) {
+                        item {
+                            ClaySectionTitle(title = "Concert / Live")
+                        }
+
+                        itemsIndexed(concertSongs) { index, song ->
+                            ClayArtistSongItem(
+                                index = index + 1,
+                                song = song,
+                                onClick = { onSongClick(song) },
+                                onInfoClick = {
+                                    selectedSongForInfo = song
+                                    showSongInfoDialog = true
+                                }
+                            )
+                        }
+                    } else {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "No concert songs found", color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Playlists Section
             if (artistPlaylists.isNotEmpty()) {
                 item {
@@ -251,6 +423,71 @@ fun ArtistDetailScreenRedesigned(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun ClayAlbumRow(
+    album: Album,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .background(ClayCardLight, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .shadow(6.dp, RoundedCornerShape(16.dp))
+                .background(ClayCardDark, RoundedCornerShape(16.dp))
+        ) {
+            AsyncImage(
+                model = album.artworkUrl,
+                contentDescription = album.name,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = album.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "${album.songCount} songs",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = TextSecondary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
