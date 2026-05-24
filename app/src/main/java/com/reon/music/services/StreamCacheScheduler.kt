@@ -30,6 +30,8 @@ class StreamCacheScheduler @Inject constructor(
     fun schedulePeriodicMaintenance() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
             .build()
         
         val maintenanceRequest = PeriodicWorkRequestBuilder<YouTubeStreamMaintenanceWorker>(

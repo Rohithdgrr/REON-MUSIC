@@ -261,8 +261,9 @@ fun ArtistDetailScreen(
                             }
                         } else null,
                         shape = RoundedCornerShape(12.dp),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
-                            containerColor = CardWhite,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = CardWhite,
+                            unfocusedContainerColor = CardWhite,
                             unfocusedBorderColor = Color.Transparent,
                             focusedBorderColor = AccentBlue.copy(alpha = 0.5f)
                         ),

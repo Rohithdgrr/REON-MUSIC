@@ -43,8 +43,6 @@ class ReonMediaBrowserService : MediaBrowserServiceCompat() {
         // Create media session
         mediaSession = MediaSessionCompat(this, "ReonMusicService").apply {
             setFlags(
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS or
-                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
                 MediaSessionCompat.FLAG_HANDLES_QUEUE_COMMANDS
             )
             

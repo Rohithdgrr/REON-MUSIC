@@ -19,12 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.rounded.*
-import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -101,19 +100,33 @@ fun YouTubeMusicStyleSearchScreen(
                 isLoading = uiState.isLoading
             )
             
-            // Search Filters - Simplified for crash safety
+            // Search Filters
             SearchFiltersSection(
-                availableFilters = availableFilters.take(3), // Limit filters for now
-                selectedFilters = setOf("all"), // Default selection
-                onFilterToggle = { filter ->
-                    // Simplified filter logic - just trigger search
-                    if (uiState.query.isNotBlank()) {
-                        viewModel.search(uiState.query)
+                availableFilters = availableFilters,
+                selectedFilters = setOf(
+                    when (uiState.activeFilter) {
+                        ViewModelFilter.ALL -> "all"
+                        ViewModelFilter.SONGS -> "songs"
+                        ViewModelFilter.ARTISTS -> "artists"
+                        ViewModelFilter.ALBUMS -> "albums"
+                        ViewModelFilter.MOVIES -> "videos"
                     }
+                ),
+                onFilterToggle = { filter ->
+                    viewModel.setFilter(
+                        when (filter.id) {
+                            "all" -> ViewModelFilter.ALL
+                            "songs" -> ViewModelFilter.SONGS
+                            "artists" -> ViewModelFilter.ARTISTS
+                            "albums" -> ViewModelFilter.ALBUMS
+                            "videos" -> ViewModelFilter.MOVIES
+                            else -> ViewModelFilter.ALL
+                        }
+                    )
                 }
             )
             
-            // Content Area - Simplified without animations for stability
+            // Content Area
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     uiState.error != null -> {
@@ -121,9 +134,6 @@ fun YouTubeMusicStyleSearchScreen(
                             error = uiState.error!!,
                             onRetry = { viewModel.search(uiState.query) }
                         )
-                    }
-                    uiState.isLoading && uiState.songs.isEmpty() -> {
-                        LoadingSection()
                     }
                     uiState.songs.isNotEmpty() -> {
                         SearchResultsSection(
@@ -142,8 +152,30 @@ fun YouTubeMusicStyleSearchScreen(
                             }
                         )
                     }
-                    uiState.query.isNotBlank() && uiState.songs.isEmpty() && !uiState.isLoading -> {
+                    uiState.query.isNotBlank() && uiState.suggestions.isNotEmpty() -> {
+                        SuggestionsSection(
+                            suggestions = uiState.suggestions,
+                            onSuggestionClick = { suggestion ->
+                                viewModel.search(suggestion.text)
+                            }
+                        )
+                    }
+                    uiState.isLoading -> {
+                        LoadingSection()
+                    }
+                    uiState.query.isNotBlank() -> {
                         EmptyResultsSection(query = uiState.query)
+                    }
+                    uiState.trendingSearches.isNotEmpty() -> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            WelcomeSection()
+                            SuggestionsSection(
+                                suggestions = uiState.trendingSearches,
+                                onSuggestionClick = { suggestion ->
+                                    viewModel.search(suggestion.text)
+                                }
+                            )
+                        }
                     }
                     else -> {
                         WelcomeSection()
@@ -882,7 +914,7 @@ private fun SuggestionItem(
         )
         
         Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
             tint = TextSecondary.copy(alpha = 0.5f),
             modifier = Modifier.size(14.dp)

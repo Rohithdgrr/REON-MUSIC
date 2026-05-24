@@ -24,6 +24,12 @@ interface HistoryDao {
     @Query("DELETE FROM listen_history")
     suspend fun clearAll()
     
+    @Query("DELETE FROM listen_history WHERE playedAt < :olderThan AND completedPlay = 1")
+    suspend fun deleteOldCompleted(olderThan: Long): Int
+    
+    @Query("DELETE FROM listen_history WHERE playedAt < :olderThan")
+    suspend fun deleteOlderThan(olderThan: Long): Int
+    
     @Query("DELETE FROM listen_history WHERE songId = :songId")
     suspend fun deleteBySongId(songId: String)
     

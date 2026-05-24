@@ -453,10 +453,8 @@ fun ReonApp(
                             )
                             
                             PlaylistDetailScreen(
-                                playlist = com.reon.music.core.model.Playlist(
-                                    id = playlistId,
-                                    name = playlistName
-                                ),
+                                playlistId = playlistId,
+                                playlistTitle = playlistName,
                                 onBackClick = { navController.popBackStack() },
                                 onSongClick = { song ->
                                     playerViewModel.playSong(song)

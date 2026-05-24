@@ -16,6 +16,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -37,6 +42,7 @@ import com.reon.music.core.model.Song
 import com.reon.music.data.database.entities.PlaylistEntity
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.ui.navigation.ReonDestination
 import com.reon.music.playback.PlayerState
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
@@ -84,9 +90,8 @@ fun LibraryScreen(
     // Sheet states
     var showSongOptions by remember { mutableStateOf(false) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
-    var showPlaylistOptions by remember { mutableStateOf(false) }
-    var selectedPlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+    var showEditPlaylistDialog by remember { mutableStateOf(false) }
     var selectedQuickCategory by remember { mutableStateOf(LibraryQuickCategory.NONE) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -187,8 +192,9 @@ fun LibraryScreen(
                     }
                 } else null,
                 shape = RoundedCornerShape(25.dp),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = SurfacePurple,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = SurfacePurple,
+                    unfocusedContainerColor = SurfacePurple,
                     unfocusedBorderColor = Color.Transparent,
                     focusedBorderColor = AccentPurple.copy(alpha = 0.5f)
                 ),
@@ -211,8 +217,12 @@ fun LibraryScreen(
                 },
                 onQuickCategoryClear = { selectedQuickCategory = LibraryQuickCategory.NONE },
                 onPlaylistClick = { playlist ->
-                    selectedPlaylist = playlist
-                    showPlaylistOptions = true
+                    navController.navigate(
+                        ReonDestination.PlaylistDetail.createRoute(
+                            playlistId = playlist.id.toString(),
+                            playlistTitle = playlist.title
+                        )
+                    )
                 }
             )
         }
@@ -263,42 +273,6 @@ fun LibraryScreen(
                 }
                 context.startActivity(Intent.createChooser(sendIntent, "Share Song"))
                 showSongOptions = false
-            }
-        )
-    }
-        
-    // Playlist Options Bottom Sheet
-    if (showPlaylistOptions && selectedPlaylist != null) {
-        PlaylistOptionsSheet(
-            playlist = selectedPlaylist!!,
-            onDismiss = { showPlaylistOptions = false },
-            onPlay = { 
-                libraryViewModel.playPlaylist(selectedPlaylist!!.id, playerViewModel, shuffle = false)
-                showPlaylistOptions = false
-            },
-            onShuffle = { 
-                libraryViewModel.playPlaylist(selectedPlaylist!!.id, playerViewModel, shuffle = true)
-                showPlaylistOptions = false
-            },
-            onAddToQueue = { 
-                libraryViewModel.addPlaylistToQueue(selectedPlaylist!!.id, playerViewModel)
-                showPlaylistOptions = false
-            },
-            onDownload = { 
-                showPlaylistOptions = false
-            },
-            onDelete = { 
-                libraryViewModel.deletePlaylist(selectedPlaylist!!)
-                showPlaylistOptions = false
-            },
-            onShare = { 
-                val sendIntent = Intent().apply {
-                    action = Intent.ACTION_SEND
-                    putExtra(Intent.EXTRA_TEXT, "Check out this playlist: ${selectedPlaylist!!.title}")
-                    type = "text/plain"
-                }
-                context.startActivity(Intent.createChooser(sendIntent, "Share Playlist"))
-                showPlaylistOptions = false
             }
         )
     }
@@ -492,7 +466,7 @@ private fun LibrarySongRow(
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(
-                        progress = (downloadProgress.coerceIn(0, 100) / 100f),
+                        progress = { (downloadProgress.coerceIn(0, 100) / 100f) },
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
                         color = AccentPurple
@@ -554,7 +528,7 @@ private fun QuickPlaylistRow(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.QueueMusic,
+                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                 contentDescription = null,
                 tint = Color.White
             )
@@ -645,7 +619,7 @@ private fun LibraryOverviewContent(
                 ) {
                     CategoryCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.TrendingUp,
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
                         title = "Most Played",
                         subtitle = "${uiState.mostPlayed.size} songs",
                         backgroundColor = CategoryMostPlayed,
@@ -837,58 +811,6 @@ private fun CategoryCard(
 }
 
 @Composable
-private fun CompactCategoryCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    title: String,
-    backgroundColor: Color,
-    iconColor: Color,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier
-            .height(58.dp)
-            .clickable(onClick = {
-                try {
-                    onClick()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = iconColor,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp)
-                ),
-                color = TextPrimary,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
 private fun RecentlyPlayedItem(
     song: Song,
     isPlaying: Boolean,
@@ -957,225 +879,6 @@ private fun RecentlyPlayedItem(
 }
 
 @Composable
-private fun RecentlyAddedItem(
-    item: Any,
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit
-) {
-    when (item) {
-        is Song -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(if (isPlaying) AccentPurple.copy(alpha = 0.08f) else Color.Transparent)
-                    .clickable(onClick = onClick)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(SurfacePurple)
-                ) {
-                    AsyncImage(
-                        model = (item as Song).getHighQualityArtwork(),
-                        contentDescription = (item as Song).title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    if (isPlaying) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(AccentPurple.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = AccentPurple,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-                
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = (item as Song).title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isPlaying) AccentPurple else TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = (item as Song).artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    // Show album/movie name if available
-                    if ((item as Song).album.isNotBlank()) {
-                        Text(
-                            text = (item as Song).album,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AccentPurple.copy(alpha = 0.6f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                
-                // NOW FUNCTIONAL
-                IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-        is PlaylistEntity -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick)
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(SurfacePurple),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if ((item as PlaylistEntity).thumbnailUrl != null) {
-                        AsyncImage(
-                            model = (item as PlaylistEntity).thumbnailUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.PlaylistPlay,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = (item as PlaylistEntity).title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Playlist • YouTube Music",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                
-                IconButton(onClick = onMoreClick) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = TextSecondary
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun YouTubePlaylistsContent(
-    playlists: List<PlaylistEntity>,
-    onPlaylistClick: (PlaylistEntity) -> Unit,
-    onPlaylistMoreClick: (PlaylistEntity) -> Unit
-) {
-    if (playlists.isEmpty()) {
-        EmptyStateView(
-            icon = Icons.Outlined.PlaylistPlay,
-            title = "No YouTube playlists",
-            subtitle = "Your YouTube Music playlists will appear here"
-        )
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(playlists) { playlist ->
-                PlaylistItem(
-                    playlist = playlist,
-                    onClick = { onPlaylistClick(playlist) },
-                    onMoreClick = { onPlaylistMoreClick(playlist) }
-                )
-            }
-            
-            item {
-                Spacer(modifier = Modifier.height(100.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun MadeForYouContent(
-    uiState: com.reon.music.ui.viewmodels.LibraryUiState,
-    onSongClick: (Song) -> Unit,
-    onSongMoreClick: (Song) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (uiState.recentlyPlayed.isEmpty()) {
-            item {
-                EmptyStateView(
-                    icon = Icons.Outlined.MusicNote,
-                    title = "No recommendations yet",
-                    subtitle = "Start listening to get personalized recommendations"
-                )
-            }
-        } else {
-            itemsIndexed(uiState.recentlyPlayed.take(20)) { _, song ->
-                SongListItem(
-                    song = song,
-                    isPlaying = false,
-                    onClick = { onSongClick(song) },
-                    onMoreClick = { onSongMoreClick(song) }
-                )
-            }
-            
-            item {
-                Spacer(modifier = Modifier.height(100.dp))
-            }
-        }
-    }
-}
-
-@Composable
 private fun PlaylistItem(
     playlist: PlaylistEntity,
     onClick: () -> Unit,
@@ -1204,7 +907,7 @@ private fun PlaylistItem(
                 )
             } else {
                 Icon(
-                    Icons.Default.PlaylistPlay,
+                    Icons.AutoMirrored.Filled.PlaylistPlay,
                     contentDescription = null,
                     tint = TextSecondary,
                     modifier = Modifier.size(28.dp)
@@ -1402,10 +1105,10 @@ private fun LibrarySongOptionsSheet(
             
             // Options
             OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
-            OptionMenuItem(icon = Icons.Default.PlaylistAdd, title = "Play Next", onClick = onPlayNext)
-            OptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
+            OptionMenuItem(icon = Icons.AutoMirrored.Filled.PlaylistAdd, title = "Play Next", onClick = onPlayNext)
+            OptionMenuItem(icon = Icons.AutoMirrored.Filled.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
             OptionMenuItem(icon = Icons.Outlined.Download, title = "Download", onClick = onDownload)
-            OptionMenuItem(icon = Icons.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
+            OptionMenuItem(icon = Icons.AutoMirrored.Outlined.PlaylistAdd, title = "Add to Playlist", onClick = onAddToPlaylist)
             
             HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
             
@@ -1421,95 +1124,6 @@ private fun LibrarySongOptionsSheet(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlaylistOptionsSheet(
-    playlist: PlaylistEntity,
-    onDismiss: () -> Unit,
-    onPlay: () -> Unit,
-    onShuffle: () -> Unit,
-    onAddToQueue: () -> Unit,
-    onDownload: () -> Unit,
-    onDelete: () -> Unit,
-    onShare: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = SurfacePurple
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
-        ) {
-            // Playlist header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(BackgroundPurple),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (playlist.thumbnailUrl != null) {
-                        AsyncImage(
-                            model = playlist.thumbnailUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.PlaylistPlay,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = playlist.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "${playlist.songCount} songs",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                }
-            }
-            
-            HorizontalDivider(color = BackgroundPurple)
-            
-            // Options
-            OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play All", onClick = onPlay)
-            OptionMenuItem(icon = Icons.Default.Shuffle, title = "Shuffle Play", onClick = onShuffle)
-            OptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
-            OptionMenuItem(icon = Icons.Outlined.Download, title = "Download", onClick = onDownload)
-            
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
-            
-            OptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
-            OptionMenuItem(
-                icon = Icons.Default.Delete,
-                title = "Delete Playlist",
-                onClick = onDelete,
-                tint = AccentPurple
-            )
-        }
-    }
-}
-
 @Composable
 private fun OptionMenuItem(
     icon: ImageVector,
@@ -1632,7 +1246,7 @@ private fun AddToPlaylistDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.QueueMusic,
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                 contentDescription = null,
                                 tint = TextSecondary,
                                 modifier = Modifier.size(24.dp)

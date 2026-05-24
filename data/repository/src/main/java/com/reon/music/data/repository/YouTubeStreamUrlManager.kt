@@ -6,6 +6,7 @@
 
 package com.reon.music.data.repository
 
+import androidx.collection.LruCache
 import com.reon.music.data.database.dao.YouTubeStreamCacheDao
 import com.reon.music.data.database.entities.YouTubeStreamCacheEntity
 import com.reon.music.data.network.youtube.YouTubeMusicClient
@@ -17,6 +18,7 @@ import javax.inject.Singleton
 /**
  * Manages YouTube stream URLs with automatic caching and refresh
  * Handles 6-hour expiry and proactive refresh
+ * Uses bounded LRU cache to prevent OOM from unbounded map growth
  */
 @Singleton
 class YouTubeStreamUrlManager @Inject constructor(
@@ -24,7 +26,9 @@ class YouTubeStreamUrlManager @Inject constructor(
     private val streamCacheDao: YouTubeStreamCacheDao
 ) {
     private val mutex = Mutex()
-    private val inMemoryCache = mutableMapOf<String, YouTubeStreamCacheEntity>()
+    private val inMemoryCache = object : LruCache<String, YouTubeStreamCacheEntity>(200) {
+        override fun sizeOf(key: String, value: YouTubeStreamCacheEntity): Int = 1
+    }
     
     /**
      * Get valid stream URL for a video with automatic refresh
@@ -35,8 +39,8 @@ class YouTubeStreamUrlManager @Inject constructor(
         title: String = "",
         channelName: String = ""
     ): String? = mutex.withLock {
-        // Step 1: Check in-memory cache first
-        inMemoryCache[videoId]?.let { cached ->
+        // Step 1: Check in-memory cache first (bounded LRU, no OOM risk)
+        inMemoryCache.get(videoId)?.let { cached ->
             if (!cached.isExpired() && !cached.willExpireSoon()) {
                 streamCacheDao.updateAccess(videoId)
                 return@withLock cached.audioStreamUrl
@@ -46,7 +50,7 @@ class YouTubeStreamUrlManager @Inject constructor(
         // Step 2: Check database cache
         val dbCached = streamCacheDao.getStreamCache(videoId)
         if (dbCached != null && !dbCached.isExpired() && !dbCached.willExpireSoon()) {
-            inMemoryCache[videoId] = dbCached
+            inMemoryCache.put(videoId, dbCached)
             streamCacheDao.updateAccess(videoId)
             return@withLock dbCached.audioStreamUrl
         }
@@ -64,8 +68,8 @@ class YouTubeStreamUrlManager @Inject constructor(
                 bitrate = detectBitrate(streamUrl)
             )
             
-            // Cache in both memory and database
-            inMemoryCache[videoId] = cacheEntry
+            // Cache in both memory (bounded LRU) and database
+            inMemoryCache.put(videoId, cacheEntry)
             streamCacheDao.insertStreamCache(cacheEntry)
             
             return@withLock streamUrl
@@ -91,7 +95,7 @@ class YouTubeStreamUrlManager @Inject constructor(
                         expiresAt = System.currentTimeMillis() + (6 * 60 * 60 * 1000)
                     )
                     streamCacheDao.insertStreamCache(updated)
-                    inMemoryCache[cached.videoId] = updated
+                    inMemoryCache.put(cached.videoId, updated)
                 }
             } catch (e: Exception) {
                 // Continue with next entry
@@ -105,8 +109,7 @@ class YouTubeStreamUrlManager @Inject constructor(
     suspend fun cleanupExpired() {
         val deleted = streamCacheDao.deleteExpired()
         
-        // Also clean in-memory cache
-        inMemoryCache.entries.removeIf { it.value.isExpired() }
+        // Also clean in-memory cache (LRU handles eviction automatically via trimToSize)
     }
     
     /**
@@ -132,7 +135,7 @@ class YouTubeStreamUrlManager @Inject constructor(
             totalEntries = dbStats.total,
             validEntries = dbStats.valid,
             expiredEntries = dbStats.expired,
-            inMemorySize = inMemoryCache.size,
+            inMemorySize = inMemoryCache.size(),
             hitRate = dbStats.hitRate
         )
     }
@@ -141,7 +144,7 @@ class YouTubeStreamUrlManager @Inject constructor(
      * Clear all caches
      */
     suspend fun clearAll() = mutex.withLock {
-        inMemoryCache.clear()
+        inMemoryCache.evictAll()
         streamCacheDao.deleteAll()
     }
     

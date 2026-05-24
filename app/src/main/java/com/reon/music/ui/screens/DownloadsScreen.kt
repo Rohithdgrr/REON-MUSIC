@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -86,7 +89,7 @@ fun DownloadsScreen(
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = TextPrimary
                         )
@@ -521,8 +524,8 @@ private fun DownloadSongOptionsSheet(
             
             // Options
             OptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
-            OptionMenuItem(icon = Icons.Default.PlaylistAdd, title = "Play Next", onClick = onPlayNext)
-            OptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
+            OptionMenuItem(icon = Icons.AutoMirrored.Filled.PlaylistAdd, title = "Play Next", onClick = onPlayNext)
+            OptionMenuItem(icon = Icons.AutoMirrored.Filled.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
             
             HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = BackgroundPurple)
             

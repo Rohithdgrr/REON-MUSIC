@@ -34,12 +34,13 @@ object ContentSyncScheduler {
         syncPlaylists: Boolean = true,
         syncNewReleases: Boolean = true
     ) {
-        // Build constraints
+        // Build constraints — battery-aware, no idle required for periodic
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(
                 if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
             )
-            .setRequiresBatteryNotLow(true) // Don't sync when battery is low
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
             .build()
 
         // Build input data
@@ -84,11 +85,12 @@ object ContentSyncScheduler {
         context: Context,
         wifiOnly: Boolean = false
     ): androidx.lifecycle.LiveData<WorkInfo> {
-        // Build constraints
+        // Build constraints — immediate sync, battery-aware
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(
                 if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
             )
+            .setRequiresBatteryNotLow(true)
             .build()
 
         // Build input data

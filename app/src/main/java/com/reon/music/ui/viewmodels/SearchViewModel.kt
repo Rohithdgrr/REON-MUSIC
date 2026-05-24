@@ -12,22 +12,21 @@ import androidx.lifecycle.viewModelScope
 import com.reon.music.core.common.Result
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
-import com.reon.music.core.model.SearchResult
 import com.reon.music.core.model.Song
 import com.reon.music.data.network.youtube.YouTubeMusicClient
 import com.reon.music.data.network.youtube.IndianMusicChannels
 import com.reon.music.data.repository.MusicRepository
+import com.reon.music.ui.search.SearchSuggestion
+import com.reon.music.ui.search.SuggestionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.ln
@@ -42,8 +41,8 @@ data class SearchUiState(
     val artists: List<Artist> = emptyList(),
     val movies: List<Album> = emptyList(),
     val searchHistory: List<String> = emptyList(),
-    val suggestions: List<String> = emptyList(),
-    val trendingSearches: List<String> = emptyList(),
+    val suggestions: List<SearchSuggestion> = emptyList(),
+    val trendingSearches: List<SearchSuggestion> = emptyList(),
     val activeFilter: SearchFilter = SearchFilter.ALL,
     val error: String? = null,
     val hasSearched: Boolean = false,
@@ -267,7 +266,6 @@ class SearchViewModel @Inject constructor(
     
     private fun loadTrendingSearches() {
         viewModelScope.launch {
-            // Enhanced trending searches with Indian languages first
             val trending = listOf(
                 "Telugu Songs", "Hindi Songs", "Tamil Hits",
                 "Arijit Singh", "Devi Sri Prasad", "AR Rahman",
@@ -275,7 +273,9 @@ class SearchViewModel @Inject constructor(
                 "Romantic Songs", "Party Songs", "Sad Songs",
                 "English Pop", "BTS", "Punjabi Hits"
             )
-            _uiState.value = _uiState.value.copy(trendingSearches = trending)
+            _uiState.value = _uiState.value.copy(
+                trendingSearches = trending.map { SearchSuggestion(text = it, type = SuggestionType.TRENDING) }
+            )
         }
     }
     
@@ -291,7 +291,7 @@ class SearchViewModel @Inject constructor(
                 songs = emptyList(),
                 albums = emptyList(),
                 artists = emptyList(),
-                suggestions = emptyList(),
+                suggestions = emptyList<SearchSuggestion>(),
                 hasSearched = false,
                 isLoading = false
             )
@@ -319,27 +319,28 @@ class SearchViewModel @Inject constructor(
      */
     private suspend fun loadSuggestions(query: String) {
         try {
+            val suggestions = mutableListOf<SearchSuggestion>()
+            
             val result = repository.autocomplete(query)
-            val suggestions = mutableListOf<String>()
             
             result.getOrNull()?.let { searchResult ->
-                // Extract suggestions from autocomplete results
-                searchResult.artists.take(3).forEach { suggestions.add(it.name) }
-                searchResult.albums.take(3).forEach { suggestions.add(it.name) }
-                searchResult.playlists.take(2).forEach { suggestions.add(it.name) }
+                searchResult.artists.take(3).forEach {
+                    suggestions.add(SearchSuggestion(text = it.name, type = SuggestionType.ARTIST))
+                }
+                searchResult.albums.take(3).forEach {
+                    suggestions.add(SearchSuggestion(text = it.name, type = SuggestionType.PERSONALIZED))
+                }
+                searchResult.playlists.take(2).forEach {
+                    suggestions.add(SearchSuggestion(text = it.name, type = SuggestionType.PERSONALIZED))
+                }
             }
             
-            // Add movie/album suggestions
-            val movieSuggestions = listOf(
-                "$query movie songs", "$query telugu", "$query hindi",
-                "$query tamil", "$query album"
-            )
-            suggestions.addAll(movieSuggestions.take(3))
-            
-            // Also add matching history items
-            searchHistoryList.filter { it.contains(query, ignoreCase = true) }
+            searchHistoryList
+                .filter { it.contains(query, ignoreCase = true) }
                 .take(3)
-                .forEach { suggestions.add(it) }
+                .forEach {
+                    suggestions.add(SearchSuggestion(text = it, type = SuggestionType.RECENT))
+                }
             
             _uiState.value = _uiState.value.copy(suggestions = suggestions.distinct().take(10))
         } catch (e: Exception) {
@@ -373,21 +374,19 @@ class SearchViewModel @Inject constructor(
             hasMore = true,
             currentPage = 1,
             error = null,
-            songs = emptyList() // Clear previous results
+            songs = emptyList()
         )
         allSearchResults.clear()
         
         try {
-            // Stream live results from repository
             repository.searchSongsLive(query, limit = INITIAL_SEARCH_LIMIT)
                 .collect { liveResults ->
                     try {
-                        val filteredResults = liveResults.filter { 
-                            it.id.isNotBlank() && it.title.isNotBlank() 
+                        val filteredResults = liveResults.filter {
+                            it.id.isNotBlank() && it.title.isNotBlank()
                         }
                         
                         if (filteredResults.isNotEmpty()) {
-                            // Rank results
                             val rankedSongs = filteredResults.sortedByDescending { song ->
                                 val relevanceScore = calculateBasicRelevanceScore(query, song)
                                 val viewScore = (song.viewCount / 1000000).coerceAtMost(50)
@@ -395,78 +394,15 @@ class SearchViewModel @Inject constructor(
                             }
                             
                             allSearchResults.clear()
-                            allSearchResults.addAll(rankedSongs)
+                            allSearchResults.addAll(rankedSongs.take(MAX_RESULTS))
                             
-                            // Extract artists with safe defaults
-                            val artists = rankedSongs
-                                .groupBy { it.artist.lowercase() }
-                                .mapNotNull { (name, songs) ->
-                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
-                                    val representative = songs.first()
-                                    Artist(
-                                        id = name.hashCode().toString(),
-                                        name = representative.artist.ifBlank { "Unknown" },
-                                        artworkUrl = representative.artworkUrl ?: "",
-                                        followerCount = representative.channelSubscriberCount.toInt().coerceAtLeast(0),
-                                        topSongs = songs.take(5)
-                                    )
-                                }
-                                .sortedByDescending { it.followerCount }
-                                .take(10)
-                            
-                            // Extract albums with safe defaults
-                            val albums = rankedSongs
-                                .filter { it.album.isNotBlank() }
-                                .groupBy { it.album.lowercase() }
-                                .mapNotNull { (name, songs) ->
-                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
-                                    val representative = songs.first()
-                                    Album(
-                                        id = name.hashCode().toString(),
-                                        name = representative.album.ifBlank { "Unknown Album" },
-                                        artist = representative.artist.ifBlank { "Unknown" },
-                                        artworkUrl = representative.artworkUrl ?: "",
-                                        songs = songs.take(5)
-                                    )
-                                }
-                                .sortedByDescending { it.songs.size }
-                                .take(10)
-                            
-                            // Extract movies if available
-                            val movies = rankedSongs
-                                .filter { it.movieName.isNotBlank() }
-                                .groupBy { it.movieName.lowercase() }
-                                .mapNotNull { (name, songs) ->
-                                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
-                                    val representative = songs.first()
-                                    Album(
-                                        id = ("movie_" + name).hashCode().toString(),
-                                        name = representative.movieName.ifBlank { "Unknown Movie" },
-                                        artist = representative.heroName.ifBlank { representative.artist },
-                                        artworkUrl = representative.artworkUrl ?: "",
-                                        songs = songs.take(5)
-                                    )
-                                }
-                                .sortedByDescending { it.songs.size }
-                                .take(5)
-                            
-                            // Update UI with live results
-                            _uiState.value = _uiState.value.copy(
-                                songs = rankedSongs.take(INITIAL_SEARCH_LIMIT),
-                                albums = albums,
-                                artists = artists,
-                                movies = movies,
-                                isLoading = false,
-                                hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
-                                error = null
-                            )
+                            updateUiWithFilteredResults(query, rankedSongs.take(MAX_RESULTS))
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing live search results", e)
                     }
                 }
             
-            // If no results after stream completes
             if (allSearchResults.isEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -481,6 +417,80 @@ class SearchViewModel @Inject constructor(
                 error = "Search failed: ${e.message ?: "Unknown error"}"
             )
         }
+    }
+    
+    private fun updateUiWithFilteredResults(query: String, rankedSongs: List<Song>) {
+        val filter = _uiState.value.activeFilter
+        
+        val artists = if (filter == SearchFilter.ALL || filter == SearchFilter.ARTISTS) {
+            rankedSongs
+                .groupBy { it.artist.lowercase() }
+                .mapNotNull { (name, songs) ->
+                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                    val representative = songs.first()
+                    Artist(
+                        id = name.hashCode().toString(),
+                        name = representative.artist.ifBlank { "Unknown" },
+                        artworkUrl = representative.artworkUrl ?: "",
+                        followerCount = representative.channelSubscriberCount.toInt().coerceAtLeast(0),
+                        topSongs = songs.take(5)
+                    )
+                }
+                .sortedByDescending { it.followerCount }
+                .take(10)
+        } else emptyList()
+        
+        val albums = if (filter == SearchFilter.ALL || filter == SearchFilter.ALBUMS) {
+            rankedSongs
+                .filter { it.album.isNotBlank() }
+                .groupBy { it.album.lowercase() }
+                .mapNotNull { (name, songs) ->
+                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                    val representative = songs.first()
+                    Album(
+                        id = name.hashCode().toString(),
+                        name = representative.album.ifBlank { "Unknown Album" },
+                        artist = representative.artist.ifBlank { "Unknown" },
+                        artworkUrl = representative.artworkUrl ?: "",
+                        songs = songs.take(5)
+                    )
+                }
+                .sortedByDescending { it.songs.size }
+                .take(10)
+        } else emptyList()
+        
+        val movies = if (filter == SearchFilter.ALL || filter == SearchFilter.MOVIES) {
+            rankedSongs
+                .filter { it.movieName.isNotBlank() }
+                .groupBy { it.movieName.lowercase() }
+                .mapNotNull { (name, songs) ->
+                    if (songs.isEmpty() || name.isBlank()) return@mapNotNull null
+                    val representative = songs.first()
+                    Album(
+                        id = ("movie_" + name).hashCode().toString(),
+                        name = representative.movieName.ifBlank { "Unknown Movie" },
+                        artist = representative.heroName.ifBlank { representative.artist },
+                        artworkUrl = representative.artworkUrl ?: "",
+                        songs = songs.take(5)
+                    )
+                }
+                .sortedByDescending { it.songs.size }
+                .take(5)
+        } else emptyList()
+        
+        val songs = if (filter == SearchFilter.SONGS) rankedSongs
+        else if (filter == SearchFilter.ALL) rankedSongs
+        else emptyList()
+        
+        _uiState.value = _uiState.value.copy(
+            songs = songs.take(INITIAL_SEARCH_LIMIT),
+            albums = albums,
+            artists = artists,
+            movies = movies,
+            isLoading = false,
+            hasMore = rankedSongs.size > INITIAL_SEARCH_LIMIT,
+            error = null
+        )
     }
     
     /**
@@ -656,11 +666,11 @@ class SearchViewModel @Inject constructor(
         
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
+            if (!isActive) return@launch
             _uiState.value = _uiState.value.copy(isLoadingMore = true)
             
             val currentPage = _uiState.value.currentPage
             val startIndex = currentPage * PAGE_SIZE
-            val endIndex = startIndex + PAGE_SIZE
             
             if (startIndex < allSearchResults.size) {
                 val reRanked = reRankWithYouTubeSignals(_uiState.value.query, allSearchResults)
@@ -675,7 +685,6 @@ class SearchViewModel @Inject constructor(
                     hasMore = sliceEnd < reRanked.size
                 )
             } else {
-                // Fetch more from API
                 val query = _uiState.value.query
                 if (query.isNotBlank()) {
                     try {
@@ -684,25 +693,31 @@ class SearchViewModel @Inject constructor(
                             "$query latest",
                             "$query hits"
                         )
+                        val existingIds = HashSet<String>(allSearchResults.size)
+                        allSearchResults.forEach { existingIds.add(it.id) }
                         
                         moreQueries.forEach { searchQuery ->
+                            if (!isActive) return@launch
                             val result = youTubeClient.searchSongs(searchQuery)
                             if (result is Result.Success) {
-                                val newSongs = result.data.filter { newSong ->
-                                    !allSearchResults.any { it.id == newSong.id }
+                                val newSongs = result.data.filter { it.id !in existingIds }
+                                newSongs.forEach { existingIds.add(it.id) }
+                                val roomLeft = MAX_RESULTS - allSearchResults.size
+                                if (roomLeft > 0) {
+                                    val batch = newSongs.take(roomLeft)
+                                    allSearchResults.addAll(batch)
                                 }
-                                allSearchResults.addAll(newSongs)
                                 val reRanked = reRankWithYouTubeSignals(query, allSearchResults)
                                 allSearchResults = reRanked.toMutableList()
                                 _uiState.value = _uiState.value.copy(
                                     songs = _uiState.value.songs + reRanked.drop(_uiState.value.songs.size),
                                     currentPage = currentPage + 1,
-                                    hasMore = reRanked.size > _uiState.value.songs.size
+                                    hasMore = reRanked.size > _uiState.value.songs.size && allSearchResults.size < MAX_RESULTS
                                 )
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error loading more results", e)
+                        if (isActive) Log.e(TAG, "Error loading more results", e)
                     }
                 }
                 _uiState.value = _uiState.value.copy(isLoadingMore = false)
@@ -771,6 +786,10 @@ class SearchViewModel @Inject constructor(
     
     fun setFilter(filter: SearchFilter) {
         _uiState.value = _uiState.value.copy(activeFilter = filter)
+        if (allSearchResults.isNotEmpty()) {
+            val reRanked = reRankWithYouTubeSignals(_uiState.value.query, allSearchResults.toList())
+            updateUiWithFilteredResults(_uiState.value.query, reRanked)
+        }
     }
     
     private fun addToHistory(query: String) {
@@ -795,6 +814,7 @@ class SearchViewModel @Inject constructor(
     
     fun clearSearch() {
         searchJob?.cancel()
+        suggestionJob?.cancel()
         loadMoreJob?.cancel()
         allSearchResults.clear()
         _uiState.value = SearchUiState(searchHistory = searchHistoryList.toList())

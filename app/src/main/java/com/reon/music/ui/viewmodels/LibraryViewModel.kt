@@ -155,6 +155,13 @@ class LibraryViewModel @Inject constructor(
         }
     }
     
+    fun updatePlaylist(id: Long, newTitle: String, newDescription: String?) {
+        viewModelScope.launch {
+            val existing = playlistDao.getPlaylistById(id) ?: return@launch
+            playlistDao.update(existing.copy(title = newTitle, description = newDescription))
+        }
+    }
+    
     fun addToPlaylist(playlistId: Long, song: Song) {
         viewModelScope.launch {
             // First ensure song is in database

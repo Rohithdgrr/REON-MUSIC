@@ -9,20 +9,7 @@ package com.reon.music.ui.search
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.*
 
-data class SearchResult(
-    val id: String,
-    val title: String,
-    val subtitle: String,
-    val imageUrl: String?,
-    val type: SearchResultType,
-    val duration: String? = null
-)
-
-enum class SearchResultType {
-    SONG, VIDEO, ARTIST, ALBUM, PLAYLIST
-}
 
 data class SearchSuggestion(
     val text: String,
@@ -47,5 +34,5 @@ val availableFilters = listOf(
     SearchFilter("videos", "Videos", Icons.Filled.VideoFile),
     SearchFilter("artists", "Artists", Icons.Filled.Person),
     SearchFilter("albums", "Albums", Icons.Filled.Album),
-    SearchFilter("playlists", "Playlists", Icons.AutoMirrored.Filled.QueueMusic)
+    SearchFilter("playlists", "Playlists", Icons.Filled.QueueMusic)
 )

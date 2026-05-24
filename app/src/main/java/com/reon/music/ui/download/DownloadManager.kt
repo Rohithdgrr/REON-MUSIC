@@ -241,7 +241,7 @@ private fun DownloadItem(
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 LinearProgressIndicator(
-                    progress = animatedProgress,
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)

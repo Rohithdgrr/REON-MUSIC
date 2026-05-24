@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.clickable
@@ -37,7 +40,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.reon.music.core.model.*
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
+import com.reon.music.data.database.entities.PlaylistEntity
 
 // Premium Light Theme Colors
 private val BackgroundLight = Color(0xFFFFFFFF)
@@ -51,12 +56,14 @@ private val AccentRed = Color(0xFFE53935)
 @Composable
 fun ChartDetailScreen(
     chartTitle: String,
-    chartType: String = "chart", // "chart", "playlist", "language", "mood"
+    chartType: String = "chart",
     onBackClick: () -> Unit = {},
     onSongClick: (Song) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
+    playerViewModel: PlayerViewModel = hiltViewModel(),
+    libraryViewModel: LibraryViewModel = hiltViewModel()
 ) {
+    val libUiState by libraryViewModel.uiState.collectAsState()
     val uiState by homeViewModel.uiState.collectAsState()
     
     // Sorting state
@@ -66,6 +73,7 @@ fun ChartDetailScreen(
     // Song options state
     var showSongOptions by remember { mutableStateOf(false) }
     var selectedSong by remember { mutableStateOf<Song?>(null) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     
     // Endless scrolling state
     var currentPage by remember { mutableStateOf(1) }
@@ -372,8 +380,9 @@ fun ChartDetailScreen(
                         }
                     } else null,
                     shape = RoundedCornerShape(12.dp),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        containerColor = CardWhite,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardWhite,
+                        unfocusedContainerColor = CardWhite,
                         unfocusedBorderColor = Color.LightGray.copy(alpha = 0.3f),
                         focusedBorderColor = AccentBlue.copy(alpha = 0.5f)
                     ),
@@ -427,7 +436,7 @@ fun ChartDetailScreen(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Sort,
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
                                     contentDescription = "Sort",
                                     tint = AccentBlue,
                                     modifier = Modifier.size(20.dp)
@@ -558,7 +567,7 @@ fun ChartDetailScreen(
                     showSongOptions = false
                 },
                 onAddToPlaylist = {
-                    // Navigate or show playlist dialog
+                    showAddToPlaylistDialog = true
                     showSongOptions = false
                 },
                 onDownload = { 
@@ -571,6 +580,18 @@ fun ChartDetailScreen(
                 },
                 onShare = { 
                     showSongOptions = false 
+                }
+            )
+        }
+        
+        // Add to Playlist Dialog
+        if (showAddToPlaylistDialog && selectedSong != null) {
+            AddToPlaylistDialog(
+                playlists = libUiState.playlists,
+                onDismiss = { showAddToPlaylistDialog = false },
+                onPlaylistSelected = { playlist ->
+                    libraryViewModel.addToPlaylist(playlist.id, selectedSong!!)
+                    showAddToPlaylistDialog = false
                 }
             )
         }
@@ -617,7 +638,7 @@ private fun ChartHeader(
                 .background(Color.Black.copy(alpha = 0.05f), CircleShape)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = TextPrimary
             )
@@ -964,37 +985,6 @@ private fun ChartSongItem(
 }
 
 /**
- * Playlist Detail Screen - Similar to Chart but for user/editorial playlists
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaylistDetailScreen(
-    playlist: Playlist,
-    onBackClick: () -> Unit = {},
-    onSongClick: (Song) -> Unit = {},
-    homeViewModel: HomeViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel()
-) {
-    val uiState by homeViewModel.uiState.collectAsState()
-    
-    // Get playlist songs (for now, use a mix of songs)
-    val songs = remember(uiState) {
-        (uiState.quickPicksSongs + uiState.newReleases + uiState.hindiSongs)
-            .distinctBy { it.id }
-            .take(playlist.songCount.coerceAtMost(30))
-    }
-    
-    ChartDetailScreen(
-        chartTitle = playlist.name,
-        chartType = "playlist",
-        onBackClick = onBackClick,
-        onSongClick = onSongClick,
-        homeViewModel = homeViewModel,
-        playerViewModel = playerViewModel
-    )
-}
-
-/**
  * Song Options Sheet for Chart/Playlist
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1057,7 +1047,7 @@ private fun ChartSongOptionsSheet(
             // Options
             ChartOptionMenuItem(icon = Icons.Default.PlayArrow, title = "Play", onClick = onPlay)
             ChartOptionMenuItem(icon = Icons.Default.SkipNext, title = "Play Next", onClick = onPlayNext)
-            ChartOptionMenuItem(icon = Icons.Default.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
+            ChartOptionMenuItem(icon = Icons.AutoMirrored.Filled.QueueMusic, title = "Add to Queue", onClick = onAddToQueue)
             ChartOptionMenuItem(icon = Icons.Default.Download, title = "Download", onClick = onDownload)
             ChartOptionMenuItem(icon = Icons.Default.Share, title = "Share", onClick = onShare)
         }
@@ -1149,5 +1139,42 @@ private fun SortOptionsDialog(
                 Text("Done")
             }
         }
+    )
+}
+
+@Composable
+private fun AddToPlaylistDialog(
+    playlists: List<PlaylistEntity>,
+    onDismiss: () -> Unit,
+    onPlaylistSelected: (PlaylistEntity) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to Playlist") },
+        text = {
+            if (playlists.isEmpty()) {
+                Text("No playlists found.", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                    itemsIndexed(playlists) { _, playlist ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPlaylistSelected(playlist) }
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = TextSecondary, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(playlist.title, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        containerColor = Color(0xFFFFFFFF)
     )
 }

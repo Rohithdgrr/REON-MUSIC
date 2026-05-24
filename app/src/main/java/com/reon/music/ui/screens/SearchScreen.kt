@@ -47,11 +47,6 @@ private val TextSecondary = Color(0xFF6B6B7B)
 private val AccentPurple = Color(0xFF8B5CF6)
 private val LightPurple = Color(0xFFE9D5FF)
 
-// Search history suggestions
-private val SEARCH_HISTORY = listOf(
-    "AR Rahman", "Arijit Singh", "Shreya Ghoshal", "Sid Sriram", "Anirudh"
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -138,7 +133,7 @@ fun SearchScreen(
                 }
                 searchQuery.isBlank() -> {
                     SearchHistorySection(
-                        history = SEARCH_HISTORY,
+                        history = uiState.searchHistory,
                         onHistoryClick = { historyItem ->
                             searchQuery = historyItem
                             viewModel.updateQuery(historyItem)

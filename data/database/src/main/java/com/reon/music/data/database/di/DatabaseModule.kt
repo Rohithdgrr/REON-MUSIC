@@ -8,6 +8,7 @@ package com.reon.music.data.database.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.reon.music.data.database.ReonDatabase
 import com.reon.music.data.database.dao.HistoryDao
 import com.reon.music.data.database.dao.LyricsDao
@@ -35,6 +36,7 @@ object DatabaseModule {
             ReonDatabase::class.java,
             ReonDatabase.DATABASE_NAME
         )
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .fallbackToDestructiveMigration()
             .build()
     }

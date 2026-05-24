@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":data:database"))
     
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.collection)
     implementation(libs.kotlinx.coroutines.core)
     
     implementation(libs.hilt.android)

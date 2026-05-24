@@ -206,7 +206,7 @@ fun SongOptionsSheet(
                         iconTint = AccentRed,
                         trailingContent = {
                             CircularProgressIndicator(
-                                progress = animatedProgress,
+                                progress = { animatedProgress },
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                                 color = AccentRed

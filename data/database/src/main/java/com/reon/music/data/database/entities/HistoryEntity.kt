@@ -20,7 +20,9 @@ import androidx.room.Relation
     indices = [
         Index(value = ["songId"]),
         Index(value = ["playedAt"]),
-        Index(value = ["source"])
+        Index(value = ["source"]),
+        Index(value = ["songId", "playedAt"]),
+        Index(value = ["playedAt", "source"])
     ]
 )
 data class ListenHistoryEntity(

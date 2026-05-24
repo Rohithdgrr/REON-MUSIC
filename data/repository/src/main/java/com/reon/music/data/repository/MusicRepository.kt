@@ -13,12 +13,14 @@ import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.SearchResult
 import com.reon.music.core.model.Song
 import com.reon.music.core.model.SongSortOption
+import com.reon.music.data.network.StreamResolver
 import com.reon.music.data.network.youtube.PipedClient
 import com.reon.music.data.network.youtube.YouTubeMusicClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.supervisorScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,56 +32,47 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     private val youtubeMusicClient: YouTubeMusicClient,
     private val pipedClient: PipedClient,
-    private val youtubeStreamUrlManager: YouTubeStreamUrlManager
+    private val youtubeStreamUrlManager: YouTubeStreamUrlManager,
+    private val streamResolver: StreamResolver
 ) {
     /**
      * Search for songs - YouTube Music ONLY (JioSaavn temporarily disabled)
+     * Optimized: only fires redundant searches when base results are insufficient
      */
     suspend fun searchSongs(query: String, page: Int = 1): Result<List<Song>> = coroutineScope {
-        // JioSaavn DISABLED - Using YouTube Music only
-        // val jiosaavnDeferred = async { jiosaavnClient.searchSongs(query, page) }
         val youtubeDeferred = async { youtubeMusicClient.searchSongs(query) }
-        
-        // Also try alternative search strategies for YouTube
-        val youtubeAltDeferred = async { 
-            // Try with "official" keyword
-            youtubeMusicClient.searchSongs("$query official").getOrNull() ?: emptyList()
-        }
-        val youtubeMusicDeferred = async {
-            // Try with "music" keyword
-            youtubeMusicClient.searchSongs("$query music").getOrNull() ?: emptyList()
-        }
-        
-        // val jiosaavnResult = jiosaavnDeferred.await()
         val youtubeResult = youtubeDeferred.await()
-        val youtubeAlt = youtubeAltDeferred.await()
-        val youtubeMusic = youtubeMusicDeferred.await()
         
-        val songs = mutableListOf<Song>()
+        val baseSongs = when (youtubeResult) {
+            is Result.Success -> youtubeResult.data
+            else -> emptyList()
+        }
         
-        // JioSaavn DISABLED
-        // jiosaavnResult.getOrNull()?.let { songs.addAll(it) }
-        
-        // Add YouTube results - combine all YouTube searches
-        youtubeResult.getOrNull()?.let { songs.addAll(it) }
-        songs.addAll(youtubeAlt)
-        songs.addAll(youtubeMusic)
-        
-        // Remove duplicates by ID
-        val uniqueSongs = songs.distinctBy { it.id }
-            .sortedByDescending { song ->
-                // Boost songs whose movie/album/title closely match the query
-                val q = query.lowercase()
-                var score = 0
-                if (song.movieName.isNotBlank() && song.movieName.lowercase().contains(q)) score += 4
-                if (song.album.isNotBlank() && song.album.lowercase().contains(q)) score += 3
-                if (song.title.lowercase().contains(q)) score += 2
-                if (song.description.lowercase().contains(q)) score += 1
-                score
+        // Only fire extra searches if base results are insufficient (< 5 songs)
+        val uniqueSongs = if (baseSongs.size < 5) {
+            val altDeferred = async { 
+                youtubeMusicClient.searchSongs("$query official").getOrNull() ?: emptyList()
             }
+            val musicDeferred = async {
+                youtubeMusicClient.searchSongs("$query music").getOrNull() ?: emptyList()
+            }
+            
+            val allSongs = baseSongs + altDeferred.await() + musicDeferred.await()
+            allSongs.distinctBy { it.id }
+                .sortedByDescending { song ->
+                    val q = query.lowercase()
+                    var score = 0
+                    if (song.movieName.isNotBlank() && song.movieName.lowercase().contains(q)) score += 4
+                    if (song.album.isNotBlank() && song.album.lowercase().contains(q)) score += 3
+                    if (song.title.lowercase().contains(q)) score += 2
+                    if (song.description.lowercase().contains(q)) score += 1
+                    score
+                }
+        } else {
+            baseSongs
+        }
         
         if (uniqueSongs.isEmpty()) {
-            // Return error if no YouTube results
             when {
                 youtubeResult is Result.Error -> youtubeResult
                 else -> Result.Success(emptyList())
@@ -441,37 +434,36 @@ class MusicRepository @Inject constructor(
     }
     
     /**
-     * Enhance songs with metadata
+     * Enhance songs with metadata — batch parallel fetch for efficiency
      */
-    suspend fun enhanceSongsWithMetadata(songs: List<Song>): List<Song> = coroutineScope {
+    suspend fun enhanceSongsWithMetadata(songs: List<Song>): List<Song> = supervisorScope {
         songs.map { song ->
-            if (song.source == "youtube" && song.viewCount == 0L) {
-                // Fetch metadata if not already present
-                val metadata = youtubeMusicClient.getVideoMetadata(song.id).getOrNull()
-                metadata?.let {
-                    song.copy(
-                        viewCount = it.viewCount,
-                        likeCount = it.likeCount,
-                        channelName = it.channelName.ifEmpty { song.channelName },
-                        channelId = it.channelId.ifEmpty { song.channelId },
-                        uploadDate = it.uploadDate.ifEmpty { song.uploadDate },
-                        description = it.description.ifEmpty { song.description },
-                        // Add rich metadata from description parsing
-                        year = it.releaseYear?.toString() ?: song.year,
-                        // Store additional metadata in extras map
-                        extras = song.extras + mapOfNotNull(
-                            it.composer?.let { c -> "composer" to c },
-                            it.lyricist?.let { l -> "lyricist" to l },
-                            it.producer?.let { p -> "producer" to p },
-                            it.musicLabel?.let { m -> "musicLabel" to m },
-                            it.movieName?.let { m -> "movieName" to m }
-                        ).toMap()
-                    )
-                } ?: song
-            } else {
-                song
+            async {
+                if (song.source == "youtube" && song.viewCount == 0L) {
+                    val metadata = youtubeMusicClient.getVideoMetadata(song.id).getOrNull()
+                    metadata?.let {
+                        song.copy(
+                            viewCount = it.viewCount,
+                            likeCount = it.likeCount,
+                            channelName = it.channelName.ifEmpty { song.channelName },
+                            channelId = it.channelId.ifEmpty { song.channelId },
+                            uploadDate = it.uploadDate.ifEmpty { song.uploadDate },
+                            description = it.description.ifEmpty { song.description },
+                            year = it.releaseYear?.toString() ?: song.year,
+                            extras = song.extras + mapOfNotNull(
+                                it.composer?.let { c -> "composer" to c },
+                                it.lyricist?.let { l -> "lyricist" to l },
+                                it.producer?.let { p -> "producer" to p },
+                                it.musicLabel?.let { m -> "musicLabel" to m },
+                                it.movieName?.let { m -> "movieName" to m }
+                            ).toMap()
+                        )
+                    } ?: song
+                } else {
+                    song
+                }
             }
-        }
+        }.map { it.await() }
     }
     
     /**
@@ -500,14 +492,24 @@ class MusicRepository @Inject constructor(
     }
     
     /**
-     * Prefetch stream URLs for upcoming songs in queue
-     * Ensures smooth playback without loading delays
+     * Prefetch stream URLs for upcoming songs in queue — parallel batch
+     * Ensures smooth playback without loading delays between tracks
      */
     suspend fun prefetchQueueUrls(songs: List<Song>) {
         val youtubeVideos = songs.filter { it.source == "youtube" }.map { it.id }
         if (youtubeVideos.isNotEmpty()) {
             youtubeStreamUrlManager.prefetchUrls(youtubeVideos)
         }
+    }
+    
+    /**
+     * Get stream URL with adaptive quality based on network condition
+     */
+    suspend fun getStreamUrlAdaptive(song: Song, isMetered: Boolean): Result<String> {
+        val quality = if (isMetered) StreamResolver.AdaptiveQuality.LOW else StreamResolver.AdaptiveQuality.HIGH
+        val url = streamResolver.resolveStreamUrl(song, quality)
+        return if (url != null) Result.Success(url)
+        else Result.Error(Exception("Could not get stream URL for: ${song.title}"))
     }
     
     /**

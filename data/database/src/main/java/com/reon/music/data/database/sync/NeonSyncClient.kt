@@ -32,14 +32,18 @@ class NeonSyncClient @Inject constructor(
     companion object {
         private const val TAG = "NeonSyncClient"
         
-        // Neon connection details (in production, use BuildConfig or encrypted storage)
+        // Neon connection details
+        // SECURITY: Credentials MUST be set via environment variables (NEON_PASSWORD)
+        // or BuildConfig - never hardcode passwords in source
         private const val NEON_HOST = "ep-odd-grass-a19v097i-pooler.ap-southeast-1.aws.neon.tech"
         private const val NEON_DATABASE = "neondb"
         private const val NEON_USER = "neondb_owner"
-        private const val NEON_PASSWORD = "npg_rBYXJ7xjRof2"
+        private val NEON_PASSWORD: String by lazy {
+            System.getenv("NEON_PASSWORD") ?: error("NEON_PASSWORD environment variable not set")
+        }
         
         // We'll use Neon's SQL HTTP API
-        private const val NEON_API_URL = "https://$NEON_HOST/sql"
+        private val NEON_API_URL = "https://$NEON_HOST/sql"
     }
     
     private val json = Json { 
