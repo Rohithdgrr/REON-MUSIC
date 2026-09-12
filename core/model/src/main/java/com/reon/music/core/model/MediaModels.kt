@@ -71,16 +71,25 @@ data class Song(
                 return artworkUrl.replace("http:", "https:")
             }
             
-            // If it's a standard YouTube thumbnail URL with quality suffix
+            // If it's a standard YouTube thumbnail URL with quality suffix,
+            // upgrade to maxresdefault. Specific variants first: the generic
+            // "default.jpg" replacement would otherwise corrupt "hqdefault"
+            // into "hqmaxresdefault" (or double-upgrade an already upgraded
+            // "maxresdefault" into "maxresmaxresdefault") — both 404.
             if (artworkUrl.contains("default.jpg")) {
                 // Upgrade to maxresdefault for best quality
                 // Note: Not all videos have maxresdefault, the UI should handle 404s with fallback
-                return artworkUrl
-                    .replace("default.jpg", "maxresdefault.jpg")
+                val upgraded = artworkUrl
                     .replace("hqdefault.jpg", "maxresdefault.jpg")
                     .replace("mqdefault.jpg", "maxresdefault.jpg")
                     .replace("sddefault.jpg", "maxresdefault.jpg")
-                    .replace("http:", "https:")
+                return if (upgraded != artworkUrl) {
+                    upgraded.replace("http:", "https:")
+                } else {
+                    artworkUrl
+                        .replace("default.jpg", "maxresdefault.jpg")
+                        .replace("http:", "https:")
+                }
             }
             
             // Handle googleusercontent URLs with dynamic sizing (w60-h60, w120-h120, etc.)

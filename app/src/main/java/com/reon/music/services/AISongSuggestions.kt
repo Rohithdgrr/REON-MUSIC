@@ -9,19 +9,40 @@ package com.reon.music.services
 import android.util.Log
 import com.reon.music.core.model.Song
 import com.reon.music.data.database.dao.SongDao
-import com.reon.music.data.database.entities.SongEntity
 import com.reon.music.data.repository.MusicRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Result of an AI suggestion request.
+ * Carries failures to the caller instead of silently returning an empty list.
+ */
+sealed interface SuggestionResult {
+    data class Success(val songs: List<Song>) : SuggestionResult
+    data class Error(val message: String, val cause: Throwable? = null) : SuggestionResult
+}
+
+/**
+ * Pure merge step: combine candidate lists, deduplicate, drop the
+ * currently playing song, shuffle and cap. Kept free of I/O so it
+ * is unit-testable on the JVM.
+ */
+internal fun mergeSuggestions(
+    vararg candidates: List<Song>,
+    excludeSongId: String? = null,
+    limit: Int = 20
+): List<Song> {
+    return candidates.flatMap { it }
+        .distinctBy { it.id }
+        .filter { excludeSongId == null || it.id != excludeSongId }
+        .shuffled()
+        .take(limit)
+}
 
 /**
  * AI Song Suggestions Manager
@@ -31,7 +52,6 @@ import javax.inject.Singleton
  */
 @Singleton
 class AISongSuggestions @Inject constructor(
-    @ApplicationContext private val context: android.content.Context,
     private val songDao: SongDao,
     private val repository: MusicRepository
 ) {
@@ -39,18 +59,16 @@ class AISongSuggestions @Inject constructor(
         private const val TAG = "AISongSuggestions"
         private const val SUGGESTION_LIMIT = 20
     }
-    
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    
+
     private val _isEnabled = MutableStateFlow(true)
     val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
-    
+
     /**
      * Get song suggestions based on current song
      */
-    suspend fun getSuggestions(currentSong: Song): List<Song> {
-        if (!_isEnabled.value) return emptyList()
-        
+    suspend fun getSuggestions(currentSong: Song): SuggestionResult {
+        if (!_isEnabled.value) return SuggestionResult.Success(emptyList())
+
         return try {
             // Strategy 1: Get related songs from same artist
             val artistSongs = repository.getRelatedSongs(currentSong).getOrNull() ?: emptyList()
@@ -69,26 +87,25 @@ class AISongSuggestions @Inject constructor(
                 .filter { it.genre == currentSong.genre || it.artist == currentSong.artist }
             
             // Combine and deduplicate
-            val allSuggestions = (artistSongs + genreSongs + historySongs)
-                .distinctBy { it.id }
-                .filter { it.id != currentSong.id }
-                .shuffled()
-                .take(SUGGESTION_LIMIT)
-            
+            val allSuggestions = mergeSuggestions(
+                artistSongs, genreSongs, historySongs,
+                excludeSongId = currentSong.id
+            )
+
             Log.d(TAG, "Generated ${allSuggestions.size} suggestions for ${currentSong.title}")
-            allSuggestions
-            
+            SuggestionResult.Success(allSuggestions)
+
         } catch (e: Exception) {
             Log.e(TAG, "Error generating suggestions", e)
-            emptyList()
+            SuggestionResult.Error("Could not load suggestions", e)
         }
     }
-    
+
     /**
      * Get personalized recommendations based on listening history
      */
-    suspend fun getPersonalizedRecommendations(): List<Song> {
-        if (!_isEnabled.value) return emptyList()
+    suspend fun getPersonalizedRecommendations(): SuggestionResult {
+        if (!_isEnabled.value) return SuggestionResult.Success(emptyList())
         
         return try {
             // Get user's listening history
@@ -98,7 +115,10 @@ class AISongSuggestions @Inject constructor(
             
             if (history.isEmpty()) {
                 // Fallback to trending songs
-                return repository.getTrendingSongs().getOrNull() ?: emptyList()
+                return when (val trending = repository.getTrendingSongs().getOrNull()) {
+                    null -> SuggestionResult.Error("Could not load trending songs")
+                    else -> SuggestionResult.Success(trending)
+                }
             }
             
             // Analyze listening patterns
@@ -133,23 +153,22 @@ class AISongSuggestions @Inject constructor(
             
             // Remove already played songs and deduplicate
             val playedIds = history.map { it.id }.toSet()
-            recommendations
-                .distinctBy { it.id }
+            val result = mergeSuggestions(recommendations)
                 .filter { it.id !in playedIds }
-                .shuffled()
                 .take(SUGGESTION_LIMIT)
-            
+            SuggestionResult.Success(result)
+
         } catch (e: Exception) {
             Log.e(TAG, "Error generating personalized recommendations", e)
-            emptyList()
+            SuggestionResult.Error("Could not load recommendations", e)
         }
     }
-    
+
     /**
      * Enable/disable AI suggestions
      */
     fun setEnabled(enabled: Boolean) {
-        _isEnabled.value = enabled
+        _isEnabled.update { enabled }
     }
 }
 

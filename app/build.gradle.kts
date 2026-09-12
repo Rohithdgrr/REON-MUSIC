@@ -86,7 +86,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Sign only when release credentials are provided. Without them
+            // the APK stays unsigned instead of failing on a half-configured
+            // keystore. NOTE: never fall back to a debug keystore here — a
+            // release signed with a debug key is rejected by Play and unsafe.
+            if (project.hasProperty("RELEASE_STORE_FILE")) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false

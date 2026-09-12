@@ -50,11 +50,12 @@ class ReonApplication : Application(), Configuration.Provider, ImageLoaderFactor
     private fun scheduleBackgroundTasks() {
         val workManager = WorkManager.getInstance(this)
 
-        // Stream cache maintenance every hour
+        // Stream cache maintenance every hour.
+        // Kept to network-only constraints: battery/storage gating is
+        // evaluated inside the worker so maintenance still runs (possibly
+        // deferred) instead of never firing on constrained devices.
         val maintenanceConstraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .setRequiresStorageNotLow(true)
             .build()
 
         val maintenanceRequest = PeriodicWorkRequestBuilder<YouTubeStreamMaintenanceWorker>(
@@ -75,11 +76,12 @@ class ReonApplication : Application(), Configuration.Provider, ImageLoaderFactor
             maintenanceRequest
         )
 
-        // Content sync every 2 hours
+        // Content sync every 2 hours.
+        // UNMETERED is kept to honor the Wi-Fi-only sync setting; battery /
+        // storage gating is left to the worker so sync degrades gracefully
+        // instead of never running on constrained devices.
         val syncConstraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.UNMETERED)
-            .setRequiresBatteryNotLow(true)
-            .setRequiresStorageNotLow(true)
             .build()
 
         val syncRequest = PeriodicWorkRequestBuilder<ContentSyncWorker>(

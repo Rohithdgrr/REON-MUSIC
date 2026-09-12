@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.reon.music.services.DownloadProgress
+import com.reon.music.services.SuggestionResult
 
 data class PlayerUiState(
     val isLoading: Boolean = false,
@@ -182,15 +183,16 @@ init {
     }
     
     /**
-     * Get AI song suggestions for current song
+     * Get AI song suggestions for current song.
+     * Errors are surfaced as [SuggestionResult.Error] so the UI can
+     * show feedback instead of silently receiving an empty list.
      */
-    fun getAISuggestions(): Flow<List<Song>> = flow {
+    fun getAISuggestions(): Flow<SuggestionResult> = flow {
         val currentSong = playerState.value.currentSong
         if (currentSong != null) {
-            val suggestions = aiSuggestions.getSuggestions(currentSong)
-            emit(suggestions)
+            emit(aiSuggestions.getSuggestions(currentSong))
         } else {
-            emit(emptyList())
+            emit(SuggestionResult.Success(emptyList()))
         }
     }
     

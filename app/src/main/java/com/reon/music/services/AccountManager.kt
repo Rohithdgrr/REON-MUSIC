@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -68,11 +69,11 @@ class AccountManager @Inject constructor(
      * Load accounts from storage
      */
     suspend fun loadAccounts() {
-        _state.value = _state.value.copy(isLoading = true)
-        
+        _state.update { it.copy(isLoading = true) }
+
         try {
             val prefs = context.accountDataStore.data.first()
-            
+
             // Load accounts
             val accountsJson = prefs[KEY_ACCOUNTS]
             val accounts = if (accountsJson != null) {
@@ -80,24 +81,37 @@ class AccountManager @Inject constructor(
             } else {
                 emptyList()
             }
-            
-            // Load current account
+
+            // Load current account, defaulting to the first account when the
+            // stored id is missing. State is set directly (instead of routing
+            // through switchAccount) so loading never re-enters account
+            // switching and never performs redundant storage writes.
             val currentAccountId = prefs[KEY_CURRENT_ACCOUNT]
-            val currentAccount = accounts.find { it.id == currentAccountId }
-            
-            _state.value = AccountState(
-                accounts = accounts,
-                currentAccount = currentAccount,
-                isLoading = false
-            )
-            
-            // If no current account but accounts exist, select first
+            var resolvedAccounts = accounts
+            var currentAccount = accounts.find { it.id == currentAccountId }
             if (currentAccount == null && accounts.isNotEmpty()) {
-                switchAccount(accounts.first().id)
+                val first = accounts.first().copy(lastUsedAt = System.currentTimeMillis())
+                currentAccount = first
+                resolvedAccounts = accounts.map {
+                    if (it.id == first.id) first else it
+                }
+                context.accountDataStore.edit { editPrefs ->
+                    editPrefs[KEY_CURRENT_ACCOUNT] = first.id
+                }
+            }
+
+            val finalAccounts = resolvedAccounts
+            val resolvedCurrent = currentAccount
+            _state.update {
+                AccountState(
+                    accounts = finalAccounts,
+                    currentAccount = resolvedCurrent,
+                    isLoading = false
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading accounts", e)
-            _state.value = _state.value.copy(isLoading = false)
+            _state.update { it.copy(isLoading = false) }
         }
     }
     
@@ -112,8 +126,8 @@ class AccountManager @Inject constructor(
         
         val updatedAccounts = _state.value.accounts + newAccount
         saveAccounts(updatedAccounts)
-        
-        _state.value = _state.value.copy(accounts = updatedAccounts)
+
+        _state.update { it.copy(accounts = updatedAccounts) }
         
         // If first account, set as current
         if (_state.value.currentAccount == null) {
@@ -141,11 +155,13 @@ class AccountManager @Inject constructor(
             prefs[KEY_CURRENT_ACCOUNT] = accountId
         }
         
-        _state.value = _state.value.copy(
-            accounts = updatedAccounts,
-            currentAccount = updatedAccount
-        )
-        
+        _state.update {
+            it.copy(
+                accounts = updatedAccounts,
+                currentAccount = updatedAccount
+            )
+        }
+
         Log.d(TAG, "Switched to account: ${account.name}")
     }
     
@@ -164,12 +180,14 @@ class AccountManager @Inject constructor(
             _state.value.currentAccount
         }
         
-        _state.value = _state.value.copy(
-            accounts = updatedAccounts,
-            currentAccount = currentAccount
-        )
+        _state.update {
+            it.copy(
+                accounts = updatedAccounts,
+                currentAccount = currentAccount
+            )
+        }
     }
-    
+
     /**
      * Delete account
      */
@@ -190,12 +208,14 @@ class AccountManager @Inject constructor(
             }
         }
         
-        _state.value = _state.value.copy(
-            accounts = updatedAccounts,
-            currentAccount = currentAccount
-        )
+        _state.update {
+            it.copy(
+                accounts = updatedAccounts,
+                currentAccount = currentAccount
+            )
+        }
     }
-    
+
     /**
      * Link YouTube account
      */

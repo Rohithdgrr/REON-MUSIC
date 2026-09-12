@@ -31,18 +31,25 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        // Minimum time the splash is kept visible for branding.
+        // NOTE: this uses a suspending delay on a background coroutine — it
+        // never blocks the main thread, so it cannot cause an ANR.
+        private const val SPLASH_HOLD_MS = 2000L
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Install splash screen with 2-second delay
         val splashScreen = installSplashScreen()
 
         var keepSplashOnScreen = true
-        
+
         // Keep splash screen visible for 2 seconds
         splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
-        
+
         // Launch coroutine to dismiss splash after 2 seconds
         lifecycleScope.launch {
-            delay(2000) // 2 seconds
+            delay(SPLASH_HOLD_MS) // 2 seconds
             keepSplashOnScreen = false
         }
         
