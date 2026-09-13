@@ -51,6 +51,7 @@ class LibraryViewModel @Inject constructor(
     private val songDao: SongDao,
     private val playlistDao: PlaylistDao,
     private val historyDao: HistoryDao,
+    private val musicRepository: com.reon.music.data.repository.MusicRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     
@@ -256,6 +257,18 @@ class LibraryViewModel @Inject constructor(
      */
     suspend fun getPlaylistSongs(playlistId: Long): List<Song> {
         return playlistDao.getPlaylistSongsOnce(playlistId).map { entity -> entity.toSong() }
+    }
+
+    /**
+     * Dynamic YouTube playlist (header + tracks) via InnerTube browse.
+     * Returns null when offline or the playlist cannot be resolved.
+     */
+    suspend fun getYouTubePlaylist(playlistId: String): com.reon.music.core.model.Playlist? {
+        return try {
+            musicRepository.getPlaylistDetails(playlistId).getOrNull()
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**

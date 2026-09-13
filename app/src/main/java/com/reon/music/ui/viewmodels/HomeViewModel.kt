@@ -507,7 +507,8 @@ class HomeViewModel @Inject constructor(
     private val userPreferences: UserPreferences,
     private val historyDao: HistoryDao,
     private val songDao: SongDao,
-    private val recommendationDataSource: com.reon.music.data.repository.RecommendationDataSource
+    private val recommendationDataSource: com.reon.music.data.repository.RecommendationDataSource,
+    private val homeCacheManager: com.reon.music.data.repository.HomeCacheManager
 ) : ViewModel() {
     
     companion object {
@@ -685,18 +686,29 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Check if content needs to be refreshed (24 hours elapsed) and load if needed
+     * Check if content needs to be refreshed (24h TTL via DataStore) and
+     * load if needed. Uses persistent [homeCacheManager] so the TTL
+     * survives process death; falls back to in-memory timestamp when
+     * DataStore is unavailable.
      */
     private fun checkAndLoadHomeContent() {
-        val currentTime = System.currentTimeMillis()
-        val timeSinceLastUpdate = currentTime - lastUpdateTime
-        
-        // Load if first time (lastUpdateTime == 0) or if 24 hours have passed
-        if (lastUpdateTime == 0L || timeSinceLastUpdate >= AUTO_UPDATE_INTERVAL_MS) {
-            Log.d(TAG, "Auto-updating home content. Time since last update: ${timeSinceLastUpdate / 1000 / 60 / 60} hours")
-            loadHomeContent()
-        } else {
-            Log.d(TAG, "Skipping auto-update. Content is fresh. Time since last update: ${timeSinceLastUpdate / 1000 / 60 / 60} hours")
+        viewModelScope.launch {
+            val stale = try {
+                homeCacheManager.isCacheStale(AUTO_UPDATE_INTERVAL_MS)
+            } catch (_: Exception) {
+                val timeSinceLastUpdate = System.currentTimeMillis() - lastUpdateTime
+                lastUpdateTime == 0L || timeSinceLastUpdate >= AUTO_UPDATE_INTERVAL_MS
+            }
+            if (stale) {
+                Log.d(TAG, "Auto-updating home content (cache stale, 24h TTL)")
+                loadHomeContent()
+            } else {
+                Log.d(TAG, "Skipping auto-update. Content is fresh (24h TTL).")
+                // Still ensure primary groups render from already-loaded state.
+                if (HomeGroups.PRIMARY !in loadedGroups && _uiState.value.newReleases.isEmpty()) {
+                    loadHomeContent()
+                }
+            }
         }
     }
     
@@ -762,9 +774,11 @@ class HomeViewModel @Inject constructor(
                 )
                 
                 Log.d(TAG, "Primary content loaded")
-                
-                // Update last update time after successful load
+
+                // Update last update time after successful load (in-memory
+                // for fast resume + persistent DataStore TTL for cold starts).
                 lastUpdateTime = System.currentTimeMillis()
+                try { homeCacheManager.markFresh(lastUpdateTime) } catch (_: Exception) { }
                 
                 // Primary sections rendered on home; extended groups load on
                 // demand via ensureGroupsLoaded() when a screen needs them.

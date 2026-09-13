@@ -99,7 +99,7 @@ fun RecentSongItem(
             style = androidx.compose.material3.MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = Color(0xFF1A1A1A),
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
@@ -158,7 +158,7 @@ fun QuickPickGridItem(
                 style = androidx.compose.material3.MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                 ),
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -166,7 +166,7 @@ fun QuickPickGridItem(
             Text(
                 text = song.artist,
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                color = Color(0xFF666666),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -180,54 +180,51 @@ fun CompactSongCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    // Edge-to-edge: no white card background — artwork with text below,
+    // using theme colors so dark/AMOLED themes stay immersive.
+    Column(
         modifier = modifier
             .width(140.dp)
-            .height(180.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
+            .clickable(onClick = onClick)
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
         ) {
             OptimizedAsyncImage(
                 imageUrl = song.getHighQualityArtwork() ?: song.artworkUrl,
                 contentDescription = song.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp),
+                modifier = Modifier.fillMaxSize(),
                 quality = ImageQuality.MEDIUM,
                 shape = RoundedCornerShape(8.dp)
             )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = Color(0xFF1A1A1A),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 12.sp
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF666666),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 10.sp
-            )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 12.sp
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = song.artist,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 10.sp
+        )
     }
 }
 
@@ -239,27 +236,51 @@ fun PlaylistCard(
 ) {
     Column(
         modifier = modifier
-            .width(170.dp)
+            .width(160.dp)
             .clickable(onClick = onClick)
     ) {
-        OptimizedAsyncImage(
-            imageUrl = playlist.artworkUrl,
-            contentDescription = playlist.name,
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
-            quality = ImageQuality.MEDIUM,
-            shape = RoundedCornerShape(12.dp)
-        )
-        
+                .size(160.dp)
+                .clip(RoundedCornerShape(8.dp))
+        ) {
+            OptimizedAsyncImage(
+                imageUrl = playlist.artworkUrl,
+                contentDescription = playlist.name,
+                modifier = Modifier.fillMaxSize(),
+                quality = ImageQuality.MEDIUM,
+                shape = RoundedCornerShape(8.dp)
+            )
+            // Gradient overlay for text readability on bright artwork.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.35f)
+                            )
+                        )
+                    )
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
             text = playlist.name,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF1A1A1A),
-            maxLines = 2,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = if (playlist.songCount > 0) "${playlist.songCount} tracks" else playlist.description.take(40),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -472,7 +493,7 @@ fun ArtistCard(
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.SemiBold
             ),
-            color = Color(0xFF1A1A1A),
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center

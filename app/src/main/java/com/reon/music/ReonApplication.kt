@@ -20,6 +20,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.reon.music.workers.ContentSyncWorker
+import com.reon.music.workers.DailyMusicRefreshWorker
 import com.reon.music.workers.YouTubeStreamMaintenanceWorker
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
@@ -102,6 +103,31 @@ class ReonApplication : Application(), Configuration.Provider, ImageLoaderFactor
             ContentSyncWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
+        )
+
+        // Daily dynamic-content refresh (Tamil hits, trending, new releases).
+        // Network-only constraints on purpose: battery/storage gating is
+        // evaluated inside the worker so refresh degrades gracefully
+        // instead of never firing on constrained devices.
+        val dailyConstraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val dailyRequest = PeriodicWorkRequestBuilder<DailyMusicRefreshWorker>(
+            24, TimeUnit.HOURS
+        )
+            .setConstraints(dailyConstraints)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                androidx.work.WorkRequest.MIN_BACKOFF_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            DailyMusicRefreshWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyRequest
         )
     }
 

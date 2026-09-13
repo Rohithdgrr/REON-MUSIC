@@ -42,6 +42,22 @@ data class VideoMetadata(
 )
 
 /**
+ * Dynamic Explore response (new releases, trending, top songs).
+ */
+data class ExploreData(
+    val newReleases: List<Song> = emptyList(),
+    val trending: List<Song> = emptyList(),
+    val topSongs: List<Song> = emptyList()
+)
+
+/**
+ * Dynamic Charts response (trending now for a region).
+ */
+data class ChartData(
+    val trending: List<Song> = emptyList()
+)
+
+/**
  * YouTube Music API Client using InnerTube
  * Clean-room implementation - independently written
  */
@@ -962,14 +978,6 @@ Song(
     }
     
     /**
-     * Get songs from a playlist
-     */
-    suspend fun getPlaylistSongs(playlistId: String): Result<List<Song>> = safeApiCall {
-        // In production, would parse playlist contents
-        emptyList()
-    }
-    
-    /**
      * Like a song
      * Note: Requires authentication in production
      */
@@ -1107,6 +1115,232 @@ albums = emptyList(),
             artists = emptyList(),
             playlists = playlists
         )
+    }
+
+    // ===== Dynamic browse endpoints (Explore / Charts / Playlists) =====
+
+    /**
+     * Raw InnerTube browse call. Used for Explore, Charts and Playlist pages.
+     */
+    suspend fun browse(browseId: String, params: String? = null): JsonObject {
+        val requestBody = buildJsonObject {
+            put("browseId", browseId)
+            put("context", CLIENT_CONTEXT)
+            if (params != null) put("params", params)
+        }
+        val response: HttpResponse = httpClient.post("$INNERTUBE_API_URL/browse?key=$API_KEY") {
+            contentType(ContentType.Application.Json)
+            header("User-Agent", USER_AGENT)
+            header("Origin", "https://music.youtube.com")
+            header("Referer", "https://music.youtube.com/")
+            setBody(requestBody.toString())
+        }
+        return Json.parseToJsonElement(response.bodyAsText()).jsonObject
+    }
+
+    /**
+     * Explore page: new releases, trending and top songs for a region.
+     * Falls back to search-based discovery when browse parsing yields nothing,
+     * so callers always get fresh, dynamic data.
+     */
+    suspend fun getExplore(region: String = "IN"): Result<ExploreData> = safeApiCall {
+        val browseJson = try {
+            browse("FEmusic_explore")
+        } catch (_: Exception) { null }
+
+        val parsed = browseJson?.let(::parseExplore)
+        if (parsed != null && (parsed.newReleases.isNotEmpty() || parsed.trending.isNotEmpty())) {
+            return@safeApiCall parsed
+        }
+        // Fallback: live search keeps content fresh even if browse layout changes.
+        val newReleases = searchSongs("new releases $region ${currentYear()}").getOrNull().orEmpty()
+        val trending = searchSongs("trending songs $region ${currentYear()}").getOrNull().orEmpty()
+        ExploreData(newReleases = newReleases, trending = trending, topSongs = trending)
+    }
+
+    /**
+     * Charts page: trending songs for a region.
+     */
+    suspend fun getCharts(region: String = "IN"): Result<ChartData> = safeApiCall {
+        val browseJson = try {
+            browse("FEmusic_charts")
+        } catch (_: Exception) { null }
+
+        val parsed = browseJson?.let(::parseCharts)
+        if (parsed != null && parsed.trending.isNotEmpty()) return@safeApiCall parsed
+
+        val trending = searchSongs("top songs $region ${currentYear()}").getOrNull().orEmpty()
+        ChartData(trending = trending)
+    }
+
+    /**
+     * Full playlist page with header metadata + tracks.
+     * Accepts raw playlist IDs ("PL..."/"RD..."/"OL...") or browse IDs ("VL...").
+     */
+    suspend fun getPlaylist(playlistId: String): Result<com.reon.music.core.model.Playlist> = safeApiCall {
+        val browseId = if (playlistId.startsWith("VL")) playlistId else "VL$playlistId"
+        val json = browse(browseId)
+        parsePlaylistPage(json, playlistId) ?: throw IllegalStateException("Playlist not found: $playlistId")
+    }
+
+    /**
+     * Playlist tracks only (lightweight when header is already known).
+     */
+    suspend fun getPlaylistSongs(playlistId: String): Result<List<Song>> = safeApiCall {
+        when (val full = getPlaylist(playlistId)) {
+            is Result.Success -> full.data.songs
+            is Result.Error -> throw full.exception
+            is Result.Loading -> emptyList()
+        }
+    }
+
+    private fun currentYear(): Int =
+        java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+
+    private fun parseExplore(json: JsonObject): ExploreData {
+        val songs = mutableListOf<Song>()
+        try {
+            val tabs = json["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+            val sections = tabs?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+            sections?.forEach { section ->
+                val carousel = section.jsonObject["musicCarouselShelfRenderer"]?.jsonObject
+                    ?: return@forEach
+                carousel["contents"]?.jsonArray?.forEach { item ->
+                    val obj = item.jsonObject
+                    (obj["musicResponsiveListItemRenderer"]?.jsonObject?.let(::parseMusicItem)
+                        ?: obj["musicTwoRowItemRenderer"]?.jsonObject?.let(::parseTwoRowItem))
+                        ?.let { songs.add(it) }
+                }
+            }
+        } catch (_: Exception) { /* browse layout drift -> fallback */ }
+        val distinct = songs.distinctBy { it.id }
+        return ExploreData(
+            newReleases = distinct.take(30),
+            trending = distinct.drop(10).take(30).ifEmpty { distinct },
+            topSongs = distinct
+        )
+    }
+
+    private fun parseCharts(json: JsonObject): ChartData {
+        val songs = mutableListOf<Song>()
+        try {
+            val tabs = json["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+            val sections = tabs?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+            sections?.forEach { section ->
+                val shelf = section.jsonObject["musicShelfRenderer"]?.jsonObject
+                    ?: section.jsonObject["musicCarouselShelfRenderer"]?.jsonObject
+                    ?: return@forEach
+                shelf["contents"]?.jsonArray?.forEach { item ->
+                    parseMusicItem(item.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject)
+                        ?.let { songs.add(it) }
+                }
+            }
+        } catch (_: Exception) { /* drift -> fallback */ }
+        return ChartData(trending = songs.distinctBy { it.id })
+    }
+
+    private fun parsePlaylistPage(json: JsonObject, fallbackId: String): com.reon.music.core.model.Playlist? {
+        return try {
+            val tabs = json["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+            val tabContent = tabs?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray ?: return null
+
+            var title = ""
+            var description = ""
+            var artwork: String? = null
+            val songs = mutableListOf<Song>()
+
+            tabContent.forEach { section ->
+                val obj = section.jsonObject
+                obj["musicDetailHeaderRenderer"]?.jsonObject?.let { header ->
+                    title = header["title"]?.jsonObject
+                        ?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject
+                        ?.get("text")?.jsonPrimitive?.content ?: title
+                    description = header["description"]?.jsonObject
+                        ?.get("runs")?.jsonArray?.joinToString("") {
+                            it.jsonObject["text"]?.jsonPrimitive?.content ?: ""
+                        } ?: description
+                    artwork = header["thumbnail"]?.jsonObject
+                        ?.get("croppedSquareThumbnailRenderer")?.jsonObject
+                        ?.get("thumbnail")?.jsonObject
+                        ?.get("thumbnails")?.jsonArray?.lastOrNull()?.jsonObject
+                        ?.get("url")?.jsonPrimitive?.content ?: artwork
+                }
+                obj["musicEditablePlaylistDetailHeaderRenderer"]?.jsonObject?.let { header ->
+                    title = header["title"]?.jsonObject
+                        ?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject
+                        ?.get("text")?.jsonPrimitive?.content ?: title
+                    artwork = header["thumbnail"]?.jsonObject
+                        ?.get("croppedSquareThumbnailRenderer")?.jsonObject
+                        ?.get("thumbnail")?.jsonObject
+                        ?.get("thumbnails")?.jsonArray?.lastOrNull()?.jsonObject
+                        ?.get("url")?.jsonPrimitive?.content ?: artwork
+                }
+                val shelf = obj["musicPlaylistShelfRenderer"]?.jsonObject
+                    ?: obj["musicShelfRenderer"]?.jsonObject
+                shelf?.get("contents")?.jsonArray?.forEach { item ->
+                    parseMusicItem(item.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject)
+                        ?.let { songs.add(it) }
+                }
+            }
+
+            if (title.isBlank() && songs.isEmpty()) return null
+            com.reon.music.core.model.Playlist(
+                id = fallbackId,
+                name = title.ifBlank { "Playlist" },
+                description = description,
+                artworkUrl = validateThumbnailUrl(artwork),
+                songCount = songs.size,
+                songs = songs.distinctBy { it.id }
+            )
+        } catch (_: Exception) { null }
+    }
+
+    private fun parseTwoRowItem(item: JsonObject?): Song? {
+        if (item == null) return null
+        return try {
+            val videoId = item["navigationEndpoint"]?.jsonObject
+                ?.get("watchEndpoint")?.jsonObject
+                ?.get("videoId")?.jsonPrimitive?.content ?: return null
+            val title = item["title"]?.jsonObject
+                ?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject
+                ?.get("text")?.jsonPrimitive?.content ?: "Unknown"
+            val subtitle = item["subtitle"]?.jsonObject
+                ?.get("runs")?.jsonArray?.joinToString("") {
+                    it.jsonObject["text"]?.jsonPrimitive?.content ?: ""
+                } ?: ""
+            val artist = subtitle.split("•").getOrNull(0)?.trim().orEmpty().ifBlank { "Unknown Artist" }
+            val thumbnail = item["thumbnailRenderer"]?.jsonObject
+                ?.get("musicThumbnailRenderer")?.jsonObject
+                ?.get("thumbnail")?.jsonObject
+                ?.get("thumbnails")?.jsonArray?.lastOrNull()?.jsonObject
+                ?.get("url")?.jsonPrimitive?.content
+            Song(
+                id = videoId,
+                title = title,
+                artist = artist,
+                artworkUrl = validateThumbnailUrl(thumbnail)?.replace("w60-h60", "w500-h500"),
+                source = "youtube",
+                channelName = artist
+            )
+        } catch (_: Exception) { null }
     }
 
     private fun validateThumbnailUrl(url: String?): String? {

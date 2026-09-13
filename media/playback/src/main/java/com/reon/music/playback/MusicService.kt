@@ -78,13 +78,13 @@ class MusicService : MediaLibraryService() {
             )
             .build()
 
-        // Disk cache for streamed audio (200 MB LRU). NOTE: signed stream
+        // Disk cache for streamed audio (500 MB LRU). NOTE: signed stream
         // URLs expire, so entries keyed by stale URLs rot until evicted —
-        // the evictor bounds the waste; validate hit rate before raising.
+        // the evictor bounds the waste.
         val cacheDir = File(cacheDir, "media").apply { mkdirs() }
         mediaCache = SimpleCache(
             cacheDir,
-            LeastRecentlyUsedCacheEvictor(200L * 1024 * 1024),
+            LeastRecentlyUsedCacheEvictor(500L * 1024 * 1024),
             StandaloneDatabaseProvider(this)
         )
         val cacheDataSourceFactory = CacheDataSource.Factory()

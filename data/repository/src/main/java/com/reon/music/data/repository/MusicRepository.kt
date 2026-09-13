@@ -137,15 +137,73 @@ class MusicRepository @Inject constructor(
     }
     
     /**
-     * Get playlist details
+     * Get playlist details — tries the dynamic browse endpoint first so
+     * YouTube playlist screens show real, latest tracks; falls back to
+     * search when the ID is a free-text query rather than a playlist ID.
      */
     suspend fun getPlaylistDetails(token: String): Result<Playlist?> {
+        // Direct playlist IDs (VL/PL/RD/OL/...) hit browse for real data.
+        if (token.startsWith("VL") || token.startsWith("PL") ||
+            token.startsWith("RD") || token.startsWith("OL")
+        ) {
+            when (val res = youtubeMusicClient.getPlaylist(token)) {
+                is Result.Success -> return Result.Success(res.data)
+                is Result.Error -> { /* fall through to search fallback */ }
+                is Result.Loading -> return Result.Success(null)
+            }
+        }
         val res = youtubeMusicClient.searchPlaylists(token, 1, 5)
         return when (res) {
-            is Result.Success -> Result.Success(res.data.firstOrNull())
+            is Result.Success -> {
+                val summary = res.data.firstOrNull()
+                if (summary == null) return Result.Success(null)
+                // Hydrate the first hit with real tracks when possible.
+                val full = youtubeMusicClient.getPlaylist(summary.id).getOrNull()
+                Result.Success(full ?: summary)
+            }
             is Result.Error -> res
             is Result.Loading -> Result.Success(null)
         }
+    }
+
+    /**
+     * Full dynamic playlist (header + tracks) via InnerTube browse.
+     */
+    suspend fun getPlaylist(playlistId: String): Result<Playlist?> {
+        return when (val res = youtubeMusicClient.getPlaylist(playlistId)) {
+            is Result.Success -> Result.Success(res.data)
+            is Result.Error -> Result.Error(res.exception, res.message)
+            is Result.Loading -> Result.Success(null)
+        }
+    }
+
+    /**
+     * Latest Tamil hits from Explore (region IN), filtered dynamically.
+     * Falls back to fresh search when Explore yields no Tamil items.
+     */
+    suspend fun getLatestTamilHits(limit: Int = 20): Result<List<Song>> {
+        val explore = youtubeMusicClient.getExplore(region = "IN").getOrNull()
+        val candidates = (explore?.newReleases.orEmpty() + explore?.trending.orEmpty())
+            .distinctBy { it.id }
+        val tamil = candidates.filter {
+            it.language.equals("tamil", true) ||
+                it.title.contains("tamil", true) ||
+                it.artist.contains("tamil", true) ||
+                it.album.contains("tamil", true)
+        }.take(limit)
+        if (tamil.isNotEmpty()) return Result.Success(tamil)
+        return youtubeSongs(yearQuery("latest tamil songs"), limit)
+    }
+
+    /**
+     * Trending now for a region via Charts browse with search fallback.
+     */
+    suspend fun getTrendingNow(region: String = "IN", limit: Int = 20): Result<List<Song>> {
+        val charts = youtubeMusicClient.getCharts(region = region).getOrNull()
+        if (!charts?.trending.isNullOrEmpty()) {
+            return Result.Success(charts.trending.take(limit))
+        }
+        return youtubeSongs(yearQuery("trending songs $region"), limit)
     }
     
     /**
