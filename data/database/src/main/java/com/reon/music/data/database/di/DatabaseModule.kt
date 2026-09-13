@@ -37,6 +37,10 @@ object DatabaseModule {
             ReonDatabase.DATABASE_NAME
         )
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            // Deliberate pre-release choice: only schema v2 is exported
+            // (see schemas/), so Migration(1, 2) cannot be written correctly.
+            // Revisit before a production release with real users: export v2
+            // now, then add explicit Migrations for every future version bump.
             .fallbackToDestructiveMigration()
             .build()
     }

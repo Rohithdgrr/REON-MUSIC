@@ -1,13 +1,27 @@
 /*
  * REON Music App - Home Screen
  * Copyright (c) 2024 REON
- * Light Purple Theme Design
+ * Light Grey + Sunrise Orange Theme
  */
 
 package com.reon.music.ui.screens
 
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -27,31 +41,81 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
+import com.reon.music.ui.components.HomeScreenSkeleton
+import com.reon.music.ui.components.ImageQuality
+import com.reon.music.ui.viewmodels.DailyMix
+import com.reon.music.ui.components.OptimizedAsyncImage
 import com.reon.music.ui.viewmodels.Genre
 import com.reon.music.ui.viewmodels.HomeViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-// Light Purple Theme Colors (matching other screens)
-private val BackgroundPurple = Color(0xFFF5F0FF)
-private val SurfacePurple = Color(0xFFFFFFFF)
-private val TextPrimary = Color(0xFF1A1A2E)
-private val TextSecondary = Color(0xFF6B6B7B)
-private val AccentPurple = Color(0xFF8B5CF6)
-private val LightPurple = Color(0xFFE9D5FF)
-private val IconPink = Color(0xFFFF6B9D)
-private val IconBlue = Color(0xFF4A90D9)
-private val IconGreen = Color(0xFF50C878)
+// Single-accent palette: surfaces and text follow the app theme
+// (light / dark / AMOLED via ReonTheme) so Home respects the user's
+// display mode; Sunrise Orange remains the one accent color.
+private val AccentOrange = Color(0xFFFF6B35)
+private val AccentOrangeDeep = Color(0xFFE5531F)
+private val AccentOrangeSoft = Color(0xFFFFE3D6)
+
+/**
+ * Theme-aware home colors. Light mode keeps the light-grey look;
+ * dark mode uses the Material scheme (pure-black friendly) with the
+ * same single orange accent, reducing color noise.
+ */
+private data class HomeColors(
+    val background: Color,
+    val surface: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val neutral: Color,
+    val neutralDark: Color
+)
+
+@Composable
+private fun rememberHomeColors(): HomeColors {
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    val scheme = MaterialTheme.colorScheme
+    return remember(dark, scheme) {
+        if (dark) {
+            HomeColors(
+                background = scheme.background,
+                surface = scheme.surface,
+                textPrimary = scheme.onBackground,
+                textSecondary = scheme.onSurfaceVariant,
+                neutral = scheme.surfaceVariant,
+                neutralDark = scheme.onSurfaceVariant
+            )
+        } else {
+            HomeColors(
+                background = Color(0xFFF5F5F5),
+                surface = Color(0xFFFFFFFF),
+                textPrimary = Color(0xFF212121),
+                textSecondary = Color(0xFF757575),
+                neutral = Color(0xFFEEEEEE),
+                neutralDark = Color(0xFF616161)
+            )
+        }
+    }
+}
 
 // Greeting based on time
 private fun getGreeting(): String {
@@ -65,9 +129,42 @@ private fun getGreeting(): String {
 
 }
 
+/**
+ * Extracts a vibrant tint from artwork on a background thread.
+ * Returns null while loading or on failure so callers fall back
+ * to the default accent.
+ */
+@Composable
+private fun rememberArtworkTint(imageUrl: String?): Color? {
+    var tint by remember { mutableStateOf<Color?>(null) }
+    val context = LocalContext.current
+    LaunchedEffect(imageUrl) {
+        tint = null
+        if (imageUrl == null) return@LaunchedEffect
+        tint = withContext(Dispatchers.IO) {
+            try {
+                val request = ImageRequest.Builder(context)
+                    .data(imageUrl)
+                    .allowHardware(false)
+                    .size(64)
+                    .build()
+                val result = context.imageLoader.execute(request)
+                val bitmap = (result as? SuccessResult)?.drawable as? BitmapDrawable
+                    ?: return@withContext null
+                val vibrant = Palette.from(bitmap.bitmap).generate().getVibrantColor(0)
+                if (vibrant != 0) Color(vibrant) else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+    return tint
+}
+
 @Composable
 private fun LastListenedGrid(
     songs: List<Song>,
+    progressById: Map<String, Float> = emptyMap(),
     onSongClick: (Song) -> Unit
 ) {
     val rows = ((songs.size + 3) / 4).coerceAtMost(4)
@@ -85,11 +182,157 @@ private fun LastListenedGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(verticalSpacing)
     ) {
-        items(songs) { song ->
+        items(songs, key = { it.id }, contentType = { "song" }) { song ->
             LastListenedGridItem(
                 song = song,
+                progress = progressById[song.id],
                 onClick = { onSongClick(song) }
             )
+        }
+    }
+}
+
+/**
+ * Listening-progress ring shown on artwork corners for "Jump Back In".
+ * Progress comes from stored play duration vs. track duration.
+ */
+@Composable
+private fun ProgressRingBadge(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            strokeWidth = 2.dp,
+            color = AccentOrange,
+            trackColor = Color.White.copy(alpha = 0.35f),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun ShowMoreButton(
+    onClick: () -> Unit,
+    label: String = "Show more"
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        TextButton(onClick = onClick) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = AccentOrange
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun JumpBackInRow(
+    items: List<com.reon.music.ui.viewmodels.JumpBackInItem>,
+    onSongClick: (Song) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(items, key = { it.song.id }, contentType = { "song" }) { item ->
+            JumpBackInCard(
+                item = item,
+                onClick = { onSongClick(item.song) },
+                sharedTransitionScope = sharedTransitionScope,
+                sharedVisibilityScope = sharedVisibilityScope
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun JumpBackInCard(
+    item: com.reon.music.ui.viewmodels.JumpBackInItem,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    val artworkSharedModifier = if (sharedTransitionScope != null && sharedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "player-artwork-${item.song.id}"),
+                animatedVisibilityScope = sharedVisibilityScope
+            )
+        }
+    } else {
+        Modifier
+    }
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .pressScaleClickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                OptimizedAsyncImage(
+                    imageUrl = item.song.artworkUrl,
+                    contentDescription = "Artwork for ${item.song.title}",
+                    quality = ImageQuality.MEDIUM,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize().then(artworkSharedModifier)
+                )
+                if (item.progress > 0f) {
+                    ProgressRingBadge(
+                        progress = item.progress,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = item.song.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = rememberHomeColors().textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = item.song.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = rememberHomeColors().textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -97,15 +340,16 @@ private fun LastListenedGrid(
 @Composable
 private fun LastListenedGridItem(
     song: Song,
+    progress: Float? = null,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -118,24 +362,24 @@ private fun LastListenedGridItem(
                     .fillMaxHeight()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(AccentPurple, IconPink)
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (song.artworkUrl != null) {
-                    AsyncImage(
-                        model = song.artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                OptimizedAsyncImage(
+                    imageUrl = song.artworkUrl,
+                    contentDescription = "Artwork for ${song.title}",
+                    quality = ImageQuality.THUMBNAIL,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (progress != null && progress > 0f) {
+                    ProgressRingBadge(
+                        progress = progress,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
                     )
                 }
             }
@@ -144,7 +388,7 @@ private fun LastListenedGridItem(
                 text = song.title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
+                color = rememberHomeColors().textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -164,7 +408,7 @@ private fun GenresRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(genres) { genre ->
+        items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
             GenreChip(
                 genre = genre,
                 onClick = { onGenreClick(genre) }
@@ -181,9 +425,9 @@ private fun GenreChip(
     val accent = Color(genre.accentColor)
     Card(
         modifier = Modifier
-            .height(42.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(21.dp),
+            .height(48.dp)
+            .pressScaleClickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.12f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -212,7 +456,7 @@ private fun GenreChip(
                 text = genre.name,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary,
+                color = rememberHomeColors().textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -220,13 +464,14 @@ private fun GenreChip(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     navController: androidx.navigation.NavHostController? = null,
     homeViewModel: HomeViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     onSongClick: (Song) -> Unit = { playerViewModel.playSong(it) },
+    onMixClick: (DailyMix) -> Unit = { mix -> playerViewModel.playQueue(mix.songs) },
     onAlbumClick: (com.reon.music.core.model.Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
     onPlaylistClick: (Playlist) -> Unit = {},
@@ -234,9 +479,12 @@ fun HomeScreen(
     onChartClick: (String, String) -> Unit = { _, _ -> },
     onSettingsClick: () -> Unit = {},
     onNavigateToLibrary: () -> Unit = {},
-    onNavigateToPlayer: () -> Unit = {}
+    onNavigateToPlayer: () -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
+    val headerTint = rememberArtworkTint(uiState.recentlyPlayedSongs.firstOrNull()?.artworkUrl)
     
     Scaffold(
         topBar = {
@@ -253,7 +501,10 @@ fun HomeScreen(
                                 .clip(CircleShape)
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(AccentPurple, IconPink)
+                                        colors = listOf(
+                                            AccentOrange,
+                                            headerTint ?: AccentOrangeDeep
+                                        )
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -270,44 +521,143 @@ fun HomeScreen(
                             Text(
                                 text = getGreeting(),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                                color = rememberHomeColors().textSecondary
                             )
                             Text(
                                 text = "User",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = rememberHomeColors().textPrimary
                             )
                         }
                     }
                 },
                 actions = {
-                    // Settings icon only
+                    // Manual refresh + settings
+                    IconButton(
+                        onClick = {
+                            homeViewModel.clearError()
+                            homeViewModel.refresh()
+                        },
+                        enabled = !uiState.isLoading
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                color = AccentOrange,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Refresh",
+                                tint = AccentOrange
+                            )
+                        }
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
                             contentDescription = "Settings",
-                            tint = AccentPurple
+                            tint = AccentOrange
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BackgroundPurple
+                    containerColor = headerTint?.copy(alpha = 0.18f)
+                        ?.compositeOver(rememberHomeColors().background) ?: rememberHomeColors().background
                 ),
                 windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
             )
         },
-        containerColor = BackgroundPurple
+        containerColor = rememberHomeColors().background
     ) { paddingValues ->
-        LazyColumn(
+        val hasContent = uiState.recentlyPlayedSongs.isNotEmpty() ||
+            uiState.quickPicksSongs.isNotEmpty() ||
+            uiState.newReleases.isNotEmpty() ||
+            uiState.featuredPlaylists.isNotEmpty() ||
+            uiState.jumpBackIn.isNotEmpty() ||
+            uiState.charts.isNotEmpty()
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(BackgroundPurple),
-            contentPadding = PaddingValues(bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(rememberHomeColors().background)
         ) {
-            // Last Listened (4x4 Grid)
+            when {
+                uiState.isLoading && !hasContent -> {
+                    HomeScreenSkeleton(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 8.dp)
+                    )
+                }
+                uiState.error != null && !hasContent -> {
+                    HomeErrorState(
+                        message = uiState.error ?: "Failed to load content",
+                        onRetry = {
+                            homeViewModel.clearError()
+                            homeViewModel.refresh()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> {
+                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    val scope = rememberCoroutineScope()
+                    // State firewall: only the back-to-top button recomposes
+                    // when scrolling crosses the visibility threshold.
+                    val showBackToTop by remember {
+                        derivedStateOf { listState.firstVisibleItemIndex > 8 }
+                    }
+                    // Auto-refresh stale content when returning to Home.
+                    // (platform LocalLifecycleOwner avoids a new lifecycle
+                    // runtime-compose dependency; rows auto-mirror for RTL.)
+                    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                homeViewModel.refreshIfStale()
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    }
+                    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                        isRefreshing = uiState.isLoading && hasContent,
+                        onRefresh = {
+                            homeViewModel.clearError()
+                            homeViewModel.refresh()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        val sectionErrorMessage = if (uiState.sectionErrors.isNotEmpty()) {
+                            "Couldn't load: ${uiState.sectionErrors.keys.joinToString(", ")}"
+                        } else null
+                        val bannerMessage = uiState.error ?: sectionErrorMessage
+                        if (bannerMessage != null) {
+                            item {
+                                HomeErrorBanner(
+                                    message = bannerMessage,
+                                    onRetry = {
+                                        homeViewModel.clearError()
+                                        homeViewModel.retryFailedSections()
+                                    },
+                                    onDismiss = {
+                                        homeViewModel.clearError()
+                                        homeViewModel.clearSectionErrors()
+                                    }
+                                )
+                            }
+                        }
+            // Last Listened (grid, paged window from the ViewModel)
             if (uiState.recentlyPlayedSongs.isNotEmpty()) {
                 item {
                     SectionHeader(
@@ -317,30 +667,53 @@ fun HomeScreen(
                 }
                 item {
                     LastListenedGrid(
-                        songs = uiState.recentlyPlayedSongs.take(16),
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.RECENT,
+                            uiState.recentlyPlayedSongs
+                        ),
+                        progressById = uiState.songProgress,
                         onSongClick = onSongClick
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.RECENT,
+                        uiState.recentlyPlayedSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.RECENT,
+                                    uiState.recentlyPlayedSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Jump Back In (unfinished listens with progress rings)
+            if (uiState.jumpBackIn.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Jump Back In",
+                        onSeeAllClick = { onSeeAllClick("recently-played") }
+                    )
+                }
+                item {
+                    JumpBackInRow(
+                        items = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.JUMP_BACK_IN,
+                            uiState.jumpBackIn
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
                     )
                 }
             }
 
-            // Genres Section
-            if (uiState.genres.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Genres",
-                        onSeeAllClick = { onSeeAllClick("genres") }
-                    )
-                }
-                item {
-                    GenresRow(
-                        genres = uiState.genres.take(12),
-                        onGenreClick = { genre ->
-                            onChartClick("genre-${genre.id}", genre.name)
-                        }
-                    )
-                }
-            }
-            
             // Quick Picks Section
             if (uiState.quickPicksSongs.isNotEmpty()) {
                 item {
@@ -351,89 +724,81 @@ fun HomeScreen(
                 }
                 item {
                     QuickPicksGrid(
-                        songs = uiState.quickPicksSongs.take(6),
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.QUICK_PICKS,
+                            uiState.quickPicksSongs
+                        ),
                         onSongClick = onSongClick
                     )
                 }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.QUICK_PICKS,
+                        uiState.quickPicksSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.QUICK_PICKS,
+                                    uiState.quickPicksSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
             }
-            
-            // Telugu Songs Section
-            if (uiState.teluguSongs.isNotEmpty()) {
+
+            // Made For You Section
+            if (uiState.dailyMixes.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Telugu Hits",
-                        onSeeAllClick = { onSeeAllClick("telugu") }
+                        title = "Made For You",
+                        onSeeAllClick = { onSeeAllClick("daily-mix") }
+                    )
+                }
+                item {
+                    MixesRow(
+                        mixes = uiState.dailyMixes,
+                        onMixClick = onMixClick
+                    )
+                }
+            }
+
+            // Recommended Section - use quickPicksSongs as recommended
+            if (uiState.quickPicksSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Recommended For You",
+                        onSeeAllClick = { onSeeAllClick("recommended") }
                     )
                 }
                 item {
                     SongsRow(
-                        songs = uiState.teluguSongs.take(10),
-                        onSongClick = onSongClick
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.RECOMMENDED,
+                            uiState.quickPicksSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
                     )
                 }
-            }
-            
-            // Hindi Songs Section
-            if (uiState.hindiSongs.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Hindi Hits",
-                        onSeeAllClick = { onSeeAllClick("hindi") }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.RECOMMENDED,
+                        uiState.quickPicksSongs.size
                     )
-                }
-                item {
-                    SongsRow(
-                        songs = uiState.hindiSongs.take(10),
-                        onSongClick = onSongClick
-                    )
-                }
-            }
-            
-            // Tamil Songs Section
-            if (uiState.tamilSongs.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Tamil Hits",
-                        onSeeAllClick = { onSeeAllClick("tamil") }
-                    )
-                }
-                item {
-                    SongsRow(
-                        songs = uiState.tamilSongs.take(10),
-                        onSongClick = onSongClick
-                    )
-                }
-            }
-            
-            // Top Artists Section
-            if (uiState.topArtists.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Top Artists",
-                        onSeeAllClick = { onSeeAllClick("artists") }
-                    )
-                }
-                item {
-                    ArtistsRow(
-                        artists = uiState.topArtists.take(10),
-                        onArtistClick = onArtistClick
-                    )
-                }
-            }
-            
-            // Featured Playlists Section
-            if (uiState.featuredPlaylists.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Featured Playlists",
-                        onSeeAllClick = { onSeeAllClick("playlists") }
-                    )
-                }
-                item {
-                    PlaylistsRow(
-                        playlists = uiState.featuredPlaylists.take(20),
-                        onPlaylistClick = onPlaylistClick
-                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.RECOMMENDED,
+                                    uiState.quickPicksSongs.size
+                                )
+                            }
+                        )
+                    }
                 }
             }
             
@@ -447,7 +812,10 @@ fun HomeScreen(
                 }
                 item {
                     ChartsRow(
-                        charts = uiState.charts.take(5),
+                        charts = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.CHARTS,
+                            uiState.charts
+                        ),
                         onChartClick = onChartClick
                     )
                 }
@@ -463,25 +831,224 @@ fun HomeScreen(
                 }
                 item {
                     SongsRow(
-                        songs = uiState.newReleases.take(10),
-                        onSongClick = onSongClick
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.NEW_RELEASES,
+                            uiState.newReleases
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
                     )
                 }
             }
-            
-            // Recommended Section - use quickPicksSongs as recommended
-            if (uiState.quickPicksSongs.isNotEmpty()) {
+
+            // Genres Section
+            if (uiState.genres.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Recommended For You",
-                        onSeeAllClick = { onSeeAllClick("recommended") }
+                        title = "Genres",
+                        onSeeAllClick = { onSeeAllClick("genres") }
+                    )
+                }
+                item {
+                    GenresRow(
+                        genres = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.GENRES,
+                            uiState.genres
+                        ),
+                        onGenreClick = { genre ->
+                            onChartClick("genre-${genre.id}", genre.name)
+                        }
+                    )
+                }
+            }
+
+            // Telugu Songs Section
+            if (uiState.teluguSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Telugu Hits",
+                        onSeeAllClick = { onSeeAllClick("telugu") }
                     )
                 }
                 item {
                     SongsRow(
-                        songs = uiState.quickPicksSongs.take(10),
-                        onSongClick = onSongClick
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.TELUGU,
+                            uiState.teluguSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
                     )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.TELUGU,
+                        uiState.teluguSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.TELUGU,
+                                    uiState.teluguSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Hindi Songs Section
+            if (uiState.hindiSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Hindi Hits",
+                        onSeeAllClick = { onSeeAllClick("hindi") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.HINDI,
+                            uiState.hindiSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.HINDI,
+                        uiState.hindiSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.HINDI,
+                                    uiState.hindiSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Tamil Songs Section
+            if (uiState.tamilSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Tamil Hits",
+                        onSeeAllClick = { onSeeAllClick("tamil") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.TAMIL,
+                            uiState.tamilSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.TAMIL,
+                        uiState.tamilSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.TAMIL,
+                                    uiState.tamilSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Top Artists Section
+            if (uiState.topArtists.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Top Artists",
+                        onSeeAllClick = { onSeeAllClick("artists") }
+                    )
+                }
+                item {
+                    ArtistsRow(
+                        artists = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.ARTISTS,
+                            uiState.topArtists
+                        ),
+                        onArtistClick = onArtistClick
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ARTISTS,
+                        uiState.topArtists.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ARTISTS,
+                                    uiState.topArtists.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Featured Playlists Section
+            if (uiState.featuredPlaylists.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Featured Playlists",
+                        onSeeAllClick = { onSeeAllClick("playlists") }
+                    )
+                }
+                item {
+                    PlaylistsRow(
+                        playlists = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.PLAYLISTS,
+                            uiState.featuredPlaylists
+                        ),
+                        onPlaylistClick = onPlaylistClick
+                    )
+                }
+            }
+                    } // LazyColumn
+                    // Back-to-top: appears after scrolling past 8 items.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showBackToTop,
+                        enter = fadeIn(animationSpec = tween(200)),
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                scope.launch { listState.animateScrollToItem(0) }
+                            },
+                            containerColor = AccentOrange,
+                            contentColor = Color.White,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Back to top"
+                            )
+                        }
+                    }
+                    } // PullToRefreshBox
                 }
             }
         }
@@ -504,32 +1071,32 @@ private fun QuickActionsRow(
         QuickActionCard(
             icon = Icons.Outlined.LibraryMusic,
             label = "Library",
-            backgroundColor = LightPurple,
-            iconColor = AccentPurple,
+            backgroundColor = AccentOrangeSoft,
+            iconColor = AccentOrange,
             onClick = onLibraryClick,
             modifier = Modifier.weight(1f)
         )
         QuickActionCard(
             icon = Icons.Outlined.Favorite,
             label = "Favorites",
-            backgroundColor = IconPink.copy(alpha = 0.15f),
-            iconColor = IconPink,
+            backgroundColor = rememberHomeColors().neutral,
+            iconColor = AccentOrange,
             onClick = onFavoritesClick,
             modifier = Modifier.weight(1f)
         )
         QuickActionCard(
             icon = Icons.Outlined.Download,
             label = "Downloads",
-            backgroundColor = IconGreen.copy(alpha = 0.15f),
-            iconColor = IconGreen,
+            backgroundColor = AccentOrangeSoft,
+            iconColor = AccentOrange,
             onClick = onDownloadsClick,
             modifier = Modifier.weight(1f)
         )
         QuickActionCard(
             icon = Icons.Outlined.History,
             label = "History",
-            backgroundColor = IconBlue.copy(alpha = 0.15f),
-            iconColor = IconBlue,
+            backgroundColor = rememberHomeColors().neutral,
+            iconColor = rememberHomeColors().neutralDark,
             onClick = onHistoryClick,
             modifier = Modifier.weight(1f)
         )
@@ -548,9 +1115,9 @@ private fun QuickActionCard(
     Card(
         modifier = modifier
             .height(80.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -577,7 +1144,7 @@ private fun QuickActionCard(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
-                color = TextPrimary
+                color = rememberHomeColors().textPrimary
             )
         }
     }
@@ -588,6 +1155,13 @@ private fun SectionHeader(
     title: String,
     onSeeAllClick: () -> Unit
 ) {
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+            animationSpec = tween(300),
+            initialOffsetY = { it / 4 }
+        )
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -599,15 +1173,119 @@ private fun SectionHeader(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary
+            color = rememberHomeColors().textPrimary
         )
         
         TextButton(onClick = onSeeAllClick) {
             Text(
                 text = "See all",
                 style = MaterialTheme.typography.labelMedium,
-                color = AccentPurple
+                color = AccentOrange
             )
+        }
+    }
+    }
+}
+
+/**
+ * Clickable with a springy press-scale effect. Shares its
+ * interaction source with the ripple so both stay in sync.
+ */
+@Composable
+private fun Modifier.pressScaleClickable(onClick: () -> Unit): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMedium,
+            dampingRatio = Spring.DampingRatioMediumBouncy
+        ),
+        label = "pressScale"
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick
+        )
+}
+
+@Composable
+private fun HomeErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.CloudOff,
+            contentDescription = null,
+            tint = rememberHomeColors().textSecondary,
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = rememberHomeColors().textSecondary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+        ) {
+            Text(text = "Retry")
+        }
+    }
+}
+
+@Composable
+private fun HomeErrorBanner(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = AccentOrangeSoft)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = rememberHomeColors().textPrimary,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            TextButton(onClick = onRetry) {
+                Text(text = "Retry", color = AccentOrangeDeep)
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Dismiss",
+                    tint = rememberHomeColors().textSecondary
+                )
+            }
         }
     }
 }
@@ -621,7 +1299,7 @@ private fun RecentlyPlayedRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(songs) { song ->
+        items(songs, key = { it.id }, contentType = { "song" }) { song ->
             RecentlyPlayedCard(
                 song = song,
                 onClick = { onSongClick(song) }
@@ -638,9 +1316,9 @@ private fun RecentlyPlayedCard(
     Card(
         modifier = Modifier
             .width(160.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
@@ -651,28 +1329,20 @@ private fun RecentlyPlayedCard(
                     .height(160.dp)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(AccentPurple, IconPink)
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (song.artworkUrl != null) {
-                    AsyncImage(
-                        model = song.artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
+                OptimizedAsyncImage(
+                    imageUrl = song.artworkUrl,
+                    contentDescription = "Artwork for ${song.title}",
+                    quality = ImageQuality.MEDIUM,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
-            
+
             // Song info
             Column(
                 modifier = Modifier.padding(12.dp)
@@ -681,14 +1351,14 @@ private fun RecentlyPlayedCard(
                     text = song.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
+                    color = rememberHomeColors().textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = song.artist,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    color = rememberHomeColors().textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -735,9 +1405,9 @@ private fun QuickPickCard(
     Card(
         modifier = modifier
             .height(64.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -750,26 +1420,18 @@ private fun QuickPickCard(
                     .size(64.dp)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(AccentPurple, IconPink)
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (song.artworkUrl != null) {
-                    AsyncImage(
-                        model = song.artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                OptimizedAsyncImage(
+                    imageUrl = song.artworkUrl,
+                    contentDescription = "Artwork for ${song.title}",
+                    quality = ImageQuality.THUMBNAIL,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             
             // Song info
@@ -782,14 +1444,14 @@ private fun QuickPickCard(
                     text = song.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
+                    color = rememberHomeColors().textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = song.artist,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    color = rememberHomeColors().textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -799,34 +1461,137 @@ private fun QuickPickCard(
 }
 
 @Composable
-private fun SongsRow(
-    songs: List<Song>,
-    onSongClick: (Song) -> Unit
+private fun MixesRow(
+    mixes: List<DailyMix>,
+    onMixClick: (DailyMix) -> Unit
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(songs) { song ->
-            SongCard(
-                song = song,
-                onClick = { onSongClick(song) }
+        items(mixes, key = { it.id }, contentType = { "mix" }) { mix ->
+            MixCard(
+                mix = mix,
+                onClick = { onMixClick(mix) }
             )
         }
     }
 }
 
 @Composable
-private fun SongCard(
-    song: Song,
+private fun MixCard(
+    mix: DailyMix,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
+            .width(160.dp)
+            .pressScaleClickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(AccentOrange, AccentOrangeDeep)
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            OptimizedAsyncImage(
+                imageUrl = mix.artworkUrl,
+                contentDescription = "Artwork for ${mix.title}",
+                quality = ImageQuality.MEDIUM,
+                shape = RectangleShape,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.6f)
+                            )
+                        )
+                    )
+                    .padding(10.dp),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                Text(
+                    text = mix.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Text(
+            text = mix.subtitle,
+            style = MaterialTheme.typography.labelSmall,
+            color = rememberHomeColors().textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(10.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SongsRow(
+    songs: List<Song>,
+    onSongClick: (Song) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(songs, key = { it.id }, contentType = { "song" }) { song ->
+            SongCard(
+                song = song,
+                onClick = { onSongClick(song) },
+                sharedTransitionScope = sharedTransitionScope,
+                sharedVisibilityScope = sharedVisibilityScope
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun SongCard(
+    song: Song,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    val artworkSharedModifier = if (sharedTransitionScope != null && sharedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier.sharedElement(
+                rememberSharedContentState(key = "player-artwork-${song.id}"),
+                animatedVisibilityScope = sharedVisibilityScope
+            )
+        }
+    } else {
+        Modifier
+    }
+    Card(
+        modifier = Modifier
             .width(140.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
@@ -837,26 +1602,18 @@ private fun SongCard(
                     .height(140.dp)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(AccentPurple, IconPink)
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (song.artworkUrl != null) {
-                    AsyncImage(
-                        model = song.artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
+                OptimizedAsyncImage(
+                    imageUrl = song.artworkUrl,
+                    contentDescription = "Artwork for ${song.title}",
+                    quality = ImageQuality.MEDIUM,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize().then(artworkSharedModifier)
+                )
             }
             
             // Song info
@@ -867,14 +1624,14 @@ private fun SongCard(
                     text = song.title,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
+                    color = rememberHomeColors().textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = song.artist,
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
+                    color = rememberHomeColors().textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -892,7 +1649,7 @@ private fun ArtistsRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(artists) { artist ->
+        items(artists, key = { it.id }, contentType = { "artist" }) { artist ->
             ArtistCard(
                 artist = artist,
                 onClick = { onArtistClick(artist) }
@@ -909,7 +1666,7 @@ private fun ArtistCard(
     Column(
         modifier = Modifier
             .width(100.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Artist avatar
@@ -919,16 +1676,17 @@ private fun ArtistCard(
                 .clip(CircleShape)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(AccentPurple, IconPink)
+                        colors = listOf(AccentOrange, AccentOrangeDeep)
                     )
                 ),
             contentAlignment = Alignment.Center
         ) {
             if (artist.artworkUrl != null) {
-                AsyncImage(
-                    model = artist.artworkUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
+                OptimizedAsyncImage(
+                    imageUrl = artist.artworkUrl,
+                    contentDescription = "Photo of ${artist.name}",
+                    quality = ImageQuality.THUMBNAIL,
+                    shape = CircleShape,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -947,7 +1705,7 @@ private fun ArtistCard(
             text = artist.name,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
-            color = TextPrimary,
+            color = rememberHomeColors().textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -963,7 +1721,7 @@ private fun PlaylistsRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(playlists) { playlist ->
+        items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
             PlaylistCard(
                 playlist = playlist,
                 onClick = { onPlaylistClick(playlist) }
@@ -981,15 +1739,15 @@ private fun PlaylistCard(
         modifier = Modifier
             .width(180.dp)
             .height(100.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = when (playlist.id.hashCode() % 5) {
-                0 -> IconPink.copy(alpha = 0.2f)
-                1 -> IconBlue.copy(alpha = 0.2f)
-                2 -> IconGreen.copy(alpha = 0.2f)
-                3 -> AccentPurple.copy(alpha = 0.2f)
-                else -> IconPink.copy(alpha = 0.15f)
+                0 -> AccentOrangeDeep.copy(alpha = 0.2f)
+                1 -> rememberHomeColors().neutralDark.copy(alpha = 0.2f)
+                2 -> rememberHomeColors().neutralDark.copy(alpha = 0.2f)
+                3 -> AccentOrange.copy(alpha = 0.2f)
+                else -> AccentOrangeDeep.copy(alpha = 0.15f)
             }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -1005,7 +1763,7 @@ private fun PlaylistCard(
                     text = playlist.name,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = rememberHomeColors().textPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1013,7 +1771,7 @@ private fun PlaylistCard(
                 Text(
                     text = "${playlist.songCount} songs",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                    color = rememberHomeColors().textSecondary
                 )
             }
             
@@ -1021,13 +1779,13 @@ private fun PlaylistCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(SurfacePurple),
+                    .background(rememberHomeColors().surface),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = AccentPurple,
+                    tint = AccentOrange,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -1044,7 +1802,7 @@ private fun ChartsRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(charts) { chart ->
+        items(charts, key = { it.id }, contentType = { "chart" }) { chart ->
             ChartCard(
                 chart = chart,
                 onClick = { onChartClick(chart.id, chart.title) }
@@ -1059,20 +1817,20 @@ private fun ChartCard(
     onClick: () -> Unit
 ) {
     val gradientColors = when (chart.id.lowercase()) {
-        "telugu" -> listOf(IconPink, AccentPurple)
-        "tamil" -> listOf(IconBlue, AccentPurple)
-        "hindi" -> listOf(IconGreen, IconBlue)
-        "international" -> listOf(AccentPurple, IconPink)
-        else -> listOf(AccentPurple, IconBlue)
+        "telugu" -> listOf(AccentOrange, AccentOrangeDeep)
+        "tamil" -> listOf(rememberHomeColors().neutralDark, rememberHomeColors().textPrimary)
+        "hindi" -> listOf(AccentOrangeDeep, rememberHomeColors().neutralDark)
+        "international" -> listOf(AccentOrange, AccentOrangeDeep)
+        else -> listOf(AccentOrange, rememberHomeColors().neutralDark)
     }
     
     Card(
         modifier = Modifier
             .width(160.dp)
             .height(100.dp)
-            .clickable(onClick = onClick),
+            .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfacePurple),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
@@ -1111,8 +1869,8 @@ private fun ChartCard(
                     .background(Color.White.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)

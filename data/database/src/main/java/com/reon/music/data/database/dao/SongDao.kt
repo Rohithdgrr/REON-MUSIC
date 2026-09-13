@@ -49,7 +49,7 @@ interface SongDao {
     @Query("SELECT COUNT(*) FROM songs WHERE isLiked = 1")
     fun getLikedCount(): Flow<Int>
     
-    @Query("SELECT isLiked FROM songs WHERE id = :songId")
+    @Query("SELECT EXISTS(SELECT 1 FROM songs WHERE id = :songId AND isLiked = 1)")
     suspend fun isLiked(songId: String): Boolean
     
     // Library songs

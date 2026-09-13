@@ -49,6 +49,7 @@ class PlayerViewModel @Inject constructor(
     private val discordRichPresence: com.reon.music.services.DiscordRichPresence,
     private val aiSuggestions: com.reon.music.services.AISongSuggestions,
     private val smartOfflineCache: com.reon.music.services.SmartOfflineCache,
+    private val sleepTimerManager: com.reon.music.services.SleepTimerManager,
     private val userPreferences: com.reon.music.core.preferences.UserPreferences
 ) : ViewModel() {
     
@@ -421,12 +422,14 @@ init {
                     playerController.playQueue(mergedSongs, safeStartIndex, streamUrls)
                     _uiState.value = _uiState.value.copy(isLoading = false, showPlayer = true)
                     
-                    // Pre-resolve next songs in background
+                    // Pre-resolve next songs in background and swap the URLs
+                    // into the queued items so advancing never hits an
+                    // empty-URI placeholder.
                     mergedSongs.forEachIndexed { index, song ->
                         if (index != safeStartIndex && index < safeStartIndex + 5) {
                             launch {
                                 streamResolver.resolveStreamUrl(song)?.let { url ->
-                                    // Cache the URL for later
+                                    playerController.replaceStreamUrl(index, song, url)
                                 }
                             }
                         }
@@ -465,11 +468,14 @@ init {
             val nextSong = state.queue.getOrNull(nextIndex)
             
             if (nextSong != null) {
-                // Resolve URL for next song if needed
-                val url = streamResolver.resolveStreamUrl(nextSong)
-                if (url != null) {
-                    playerController.skipToNext()
+                // Resolve the URL first and swap it into the queued item;
+                // controller commands dispatch in order, so the queued
+                // replace lands before the seek. Always advance afterwards
+                // instead of stranding playback on an unresolvable URL.
+                streamResolver.resolveStreamUrl(nextSong)?.let { url ->
+                    playerController.replaceStreamUrl(nextIndex, nextSong, url)
                 }
+                playerController.skipToNext()
             } else {
                 playerController.skipToNext()
             }
@@ -632,7 +638,15 @@ init {
      * Play song from queue at specific index
      */
     fun playFromQueue(index: Int) {
-        playerController.playFromQueue(index)
+        viewModelScope.launch {
+            val song = playerState.value.queue.getOrNull(index)
+            if (song != null) {
+                streamResolver.resolveStreamUrl(song)?.let { url ->
+                    playerController.replaceStreamUrl(index, song, url)
+                }
+            }
+            playerController.playFromQueue(index)
+        }
     }
     
     /**
@@ -677,16 +691,27 @@ init {
     }
     
     /**
-     * Set sleep timer in minutes
+     * Set sleep timer in minutes. Delegates to [SleepTimerManager] so
+     * repeated calls replace (never stack) the timer and it can be
+     * cancelled. Volume fade is unsupported through MediaController,
+     * so completion simply pauses playback.
      */
     fun setSleepTimer(minutes: Int) {
-        viewModelScope.launch {
-            delay(minutes * 60 * 1000L)
-            if (isActive) {
-                playerController.pause()
-            }
-        }
+        sleepTimerManager.setCallbacks(
+            onComplete = { playerController.pause() },
+            onVolume = { /* no-op: controller has no per-stream volume */ }
+        )
+        sleepTimerManager.start(minutes * 60 * 1000L)
     }
+
+    /**
+     * Cancel the active sleep timer, if any.
+     */
+    fun cancelSleepTimer() {
+        sleepTimerManager.cancel()
+    }
+
+    val sleepTimerState = sleepTimerManager.state
     
     /**
      * Create a new playlist

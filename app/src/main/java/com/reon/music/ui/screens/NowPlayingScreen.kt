@@ -61,11 +61,13 @@ private val DividerColor = Color(0xFFEEEEEE)
 private val ProgressTrackColor = Color(0xFFE0E0E0)
 private val ProgressActiveColor = Color(0xFFE53935)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun NowPlayingScreen(
     playerViewModel: PlayerViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    sharedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
 val playerState by playerViewModel.playerState.collectAsState()
     val uiState by playerViewModel.uiState.collectAsState()
@@ -183,6 +185,19 @@ val playerState by playerViewModel.playerState.collectAsState()
             Spacer(modifier = Modifier.weight(0.15f))
             
             // Album Artwork - Larger square thumbnail centered with premium shadow
+            // Shared element with the home song card when the same song opens the player.
+            val artworkSharedModifier = if (sharedTransitionScope != null &&
+                sharedVisibilityScope != null && currentSong != null
+            ) {
+                with(sharedTransitionScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(key = "player-artwork-${currentSong.id}"),
+                        animatedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+            } else {
+                Modifier
+            }
             Box(
                 modifier = Modifier
                     .size(320.dp) // Increased size
@@ -198,7 +213,7 @@ val playerState by playerViewModel.playerState.collectAsState()
                 com.reon.music.ui.components.OptimizedAsyncImage(
                     imageUrl = currentSong?.getHighQualityArtwork() ?: currentSong?.artworkUrl,
                     contentDescription = "Album Art",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(artworkSharedModifier),
                     quality = com.reon.music.ui.components.ImageQuality.HIGH,
                     shape = RoundedCornerShape(20.dp),
                     contentScale = ContentScale.Crop

@@ -73,7 +73,9 @@ android {
             // Full: With Sentry crash reporting (optional)
             buildConfigField("boolean", "ENABLE_CRASH_ANALYTICS", "true")
             buildConfigField("boolean", "ENABLE_TRACKING", "false") // Still no tracking!
-            buildConfigField("String", "SENTRY_DSN", "\"https://your-sentry-dsn\"")
+            // Empty until Sentry is actually wired (dependency + real DSN);
+            // the previous placeholder URL would only confuse debugging.
+            buildConfigField("String", "SENTRY_DSN", "\"\"")
             buildConfigField("boolean", "IS_FOSS", "false")
         }
     }

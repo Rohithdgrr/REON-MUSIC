@@ -42,6 +42,7 @@ import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
 import com.reon.music.data.network.youtube.IndianMusicChannels
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.HomeGroups
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.ui.components.EnhancedSongInformationDialog
 
@@ -73,6 +74,11 @@ fun ArtistDetailScreenRedesigned(
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Related-artist/language data loads on demand
+    LaunchedEffect(Unit) {
+        homeViewModel.ensureGroupsLoaded(HomeGroups.LANGUAGES_EXT, HomeGroups.ARTISTS_EXT)
+    }
     
     // States
     var isFollowing by remember { mutableStateOf(false) }

@@ -341,6 +341,21 @@ class PlayerController @Inject constructor(
         }
     }
     
+    /**
+     * Swap a freshly resolved stream URL into a queued item.
+     * No-op if the queue moved on and the index now holds a different
+     * song, so stale resolutions can never corrupt playback.
+     */
+    fun replaceStreamUrl(index: Int, song: Song, streamUrl: String) {
+        scope.launch {
+            val controller = mediaController ?: return@launch
+            if (index < 0 || index >= currentQueue.size) return@launch
+            if (controller.mediaItemCount <= index) return@launch
+            if (currentQueue.getOrNull(index)?.id != song.id) return@launch
+            controller.replaceMediaItem(index, buildMediaItem(song, streamUrl))
+        }
+    }
+
     private fun buildMediaItem(song: Song, streamUrl: String): MediaItem {
         return MediaItem.Builder()
             .setMediaId(song.id)

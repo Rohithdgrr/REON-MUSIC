@@ -44,6 +44,8 @@ class ReonApplication : Application(), Configuration.Provider, ImageLoaderFactor
 
     override fun onCreate() {
         super.onCreate()
+        // Sync notifications are silently dropped on Android 8+ without this.
+        com.reon.music.workers.SyncNotificationManager.createNotificationChannel(this)
         scheduleBackgroundTasks()
     }
 

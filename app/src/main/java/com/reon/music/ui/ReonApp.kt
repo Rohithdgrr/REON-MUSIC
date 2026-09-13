@@ -8,6 +8,10 @@ package com.reon.music.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -70,6 +74,7 @@ import java.net.URLDecoder
  * Main App Composable
  * Contains navigation, mini player (separated from bottom nav), and now playing screen
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ReonApp(
     playerViewModel: PlayerViewModel = hiltViewModel(),
@@ -129,6 +134,14 @@ fun ReonApp(
         fontSizePreset = settingsUiState.fontSizePreset
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+        SharedTransitionLayout {
+            // Outer scope with no visual transition; only provides the
+            // AnimatedVisibilityScope required by shared elements.
+            AnimatedVisibility(
+                visible = true,
+                enter = EnterTransition.None,
+                exit = ExitTransition.None
+            ) {
             Scaffold(
                 bottomBar = {
                     // Combined Mini Player + Bottom Navigation
@@ -202,6 +215,8 @@ fun ReonApp(
                             HomeScreen(
                                 navController = navController,
                                 playerViewModel = playerViewModel,
+                                sharedTransitionScope = this@SharedTransitionLayout,
+                                sharedVisibilityScope = this@AnimatedVisibility,
                                 onSettingsClick = {
                                     navController.navigate(ReonDestination.Settings.route)
                                 },
@@ -230,6 +245,15 @@ fun ReonApp(
                                                 ReonDestination.ChartDetail.createRoute(
                                                     chartType = "recommended",
                                                     chartTitle = "Recommended For You"
+                                                )
+                                            )
+                                        }
+
+                                        "daily-mix" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "daily-mix",
+                                                    chartTitle = "Made For You"
                                                 )
                                             )
                                         }
@@ -278,6 +302,12 @@ fun ReonApp(
                                                 chartTitle = "Top Charts"
                                             )
                                         )
+                                        "genres" -> navController.navigate(
+                                            ReonDestination.ChartDetail.createRoute(
+                                                chartType = "genres",
+                                                chartTitle = "Genres"
+                                            )
+                                        )
 
                                         else -> Unit
                                     }
@@ -285,6 +315,22 @@ fun ReonApp(
                                 onArtistClick = { artist ->
                                     navController.navigate(
                                         ReonDestination.ArtistDetail.createRoute(artist.id, artist.name)
+                                    )
+                                },
+                                onPlaylistClick = { playlist ->
+                                    navController.navigate(
+                                        ReonDestination.PlaylistDetail.createRoute(
+                                            playlistId = playlist.id,
+                                            playlistTitle = playlist.name
+                                        )
+                                    )
+                                },
+                                onAlbumClick = { album ->
+                                    navController.navigate(
+                                        ReonDestination.AlbumDetail.createRoute(
+                                            albumName = album.name,
+                                            artistName = album.artist
+                                        )
                                     )
                                 },
                                 onChartClick = { chartType, chartTitle ->
@@ -443,18 +489,18 @@ fun ReonApp(
                             route = ReonDestination.PlaylistDetail.route,
                             arguments = listOf(
                                 navArgument("playlistId") { type = NavType.StringType },
-                                navArgument("playlistName") { type = NavType.StringType }
+                                navArgument("playlistTitle") { type = NavType.StringType }
                             )
                         ) { backStackEntry ->
                             val playlistId = backStackEntry.arguments?.getString("playlistId") ?: ""
-                            val playlistName = URLDecoder.decode(
-                                backStackEntry.arguments?.getString("playlistName") ?: "Playlist",
+                            val playlistTitle = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("playlistTitle") ?: "Playlist",
                                 "UTF-8"
                             )
-                            
+
                             PlaylistDetailScreen(
                                 playlistId = playlistId,
-                                playlistTitle = playlistName,
+                                playlistTitle = playlistTitle,
                                 onBackClick = { navController.popBackStack() },
                                 onSongClick = { song ->
                                     playerViewModel.playSong(song)
@@ -487,9 +533,13 @@ fun ReonApp(
             ) {
                 NowPlayingScreen(
                     playerViewModel = playerViewModel,
-                    onDismiss = { showNowPlaying = false }
+                    onDismiss = { showNowPlaying = false },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    sharedVisibilityScope = this@AnimatedVisibility
                 )
+            }
             }
         }
     }
+}
 }

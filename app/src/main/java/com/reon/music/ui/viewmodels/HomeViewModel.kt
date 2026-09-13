@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -38,6 +39,211 @@ data class ChartSection(
     val title: String,
     val songs: List<Song> = emptyList()
 )
+
+/**
+ * A personalized "Made For You" mix generated from listening history.
+ */
+data class DailyMix(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val songs: List<Song> = emptyList()
+) {
+    val artworkUrl: String? get() = songs.firstOrNull()?.artworkUrl
+}
+
+/**
+ * Content groups for lazy loading. Home init loads PRIMARY only;
+ * extended groups load on demand when a screen needs them.
+ */
+object HomeGroups {
+    const val PRIMARY = "primary"
+    const val SECONDARY = "secondary"
+    const val LANGUAGES_EXT = "languages_ext"
+    const val ARTISTS_EXT = "artists_ext"
+    const val MOODS = "moods"
+    const val REGIONAL = "regional"
+    const val SPOTLIGHTS = "spotlights"
+    const val CURATED = "curated"
+    const val CHANNELS = "channels"
+    const val INDIAN = "indian"
+    const val INTERNATIONAL = "international"
+
+    val ALL_EXTENDED = listOf(
+        SECONDARY, LANGUAGES_EXT, ARTISTS_EXT, MOODS, REGIONAL,
+        SPOTLIGHTS, CURATED, CHANNELS, INDIAN, INTERNATIONAL
+    )
+}
+
+/**
+ * Maps a ChartDetail chartType to the content groups that back it.
+ * Pure function so it is unit-testable on the JVM.
+ */
+internal fun groupsForChartType(chartType: String): List<String> {
+    val key = chartType.lowercase()
+    // Genre detail routes (genre-<id>) and the genres overview need no
+    // preloaded groups; ChartDetail searches on demand.
+    if (key.startsWith("genre-") || key == "genres") return emptyList()
+    return when (key) {
+        // Backed by PRIMARY (loaded at home init)
+        "recent", "recently-played", "quick-picks", "recommended", "new", "telugu", "hindi",
+        "tamil", "charts", "chart", "playlists", "daily-mix" -> listOf(HomeGroups.PRIMARY)
+        // Language extras
+        "english", "punjabi" -> listOf(HomeGroups.LANGUAGES_EXT)
+        // Regional loader
+        "kannada", "malayalam", "marathi", "bengali", "bhojpuri",
+        "gujarati", "rajasthani" -> listOf(HomeGroups.REGIONAL)
+        // Mood loaders
+        "love", "romantic", "party", "sad", "lofi", "devotional",
+        "heartbreak", "dj", "telugudj", "wedding", "viral", "trending" ->
+            listOf(HomeGroups.MOODS)
+        // Artist spotlights + collections
+        "arijitsingh", "arrahman", "spb", "dsp", "thaman", "pritam",
+        "harrisjayaraj", "manisharma", "latamangeshkar", "kishorkumar",
+        "mohammedrafi", "shreyaghoshal", "sidsriram", "anirudh",
+        "badshah", "honeysingh", "kanikakapoor" -> listOf(HomeGroups.SPOTLIGHTS)
+        // Curated user lists
+        "alltimefavorite", "mostlistening" -> listOf(HomeGroups.CURATED)
+        // International
+        "international" -> listOf(HomeGroups.INTERNATIONAL)
+        // Banjara + misc secondary loaders
+        "banjara" -> listOf(HomeGroups.SECONDARY)
+        // Unknown keys: load everything extended once (correctness first)
+        else -> HomeGroups.ALL_EXTENDED
+    }
+}
+
+/**
+ * Per-section load state. Sections update their own entry so one slow
+ * section never forces the whole home screen to recompose or show a
+ * full-screen error.
+ */
+data class HomeSectionState(
+    val isLoading: Boolean = false,
+    val itemCount: Int = 0,
+    val error: String? = null
+)
+
+/**
+ * Stable section ids shared by the ViewModel (pagination + section state)
+ * and the Home composable (row windows).
+ */
+object HomeSections {
+    const val RECENT = "recently-played"
+    const val QUICK_PICKS = "quick-picks"
+    const val DAILY_MIX = "daily-mix"
+    const val RECOMMENDED = "recommended"
+    const val CHARTS = "charts"
+    const val NEW_RELEASES = "new"
+    const val GENRES = "genres"
+    const val TELUGU = "telugu"
+    const val HINDI = "hindi"
+    const val TAMIL = "tamil"
+    const val ARTISTS = "artists"
+    const val PLAYLISTS = "playlists"
+    const val JUMP_BACK_IN = "jump-back-in"
+}
+
+/**
+ * Default visible window per home section. Rows render
+ * `visibleCount[id]` items; [HomeViewModel.loadMore] grows the window.
+ * Pure values so they are unit-testable on the JVM.
+ */
+internal fun pageSizeFor(sectionId: String): Int = when (sectionId) {
+    HomeSections.RECENT -> 16
+    HomeSections.QUICK_PICKS -> 6
+    HomeSections.RECOMMENDED -> 10
+    HomeSections.CHARTS -> 5
+    HomeSections.NEW_RELEASES -> 10
+    HomeSections.GENRES -> 12
+    HomeSections.TELUGU -> 10
+    HomeSections.HINDI -> 10
+    HomeSections.TAMIL -> 10
+    HomeSections.ARTISTS -> 10
+    HomeSections.PLAYLISTS -> 20
+    HomeSections.JUMP_BACK_IN -> 10
+    else -> 10
+}
+
+/**
+ * Next visible count when the user taps "Show more": grows by one page
+ * and clamps to the total so the button disappears at the end.
+ * Pure function so it is unit-testable on the JVM.
+ */
+internal fun nextVisibleCount(current: Int, total: Int, sectionId: String): Int =
+    (current + pageSizeFor(sectionId)).coerceAtMost(total.coerceAtLeast(0))
+
+/**
+ * A recently played song with its listening progress (0..1) derived from
+ * stored play duration vs. track duration. Completed plays report 1f.
+ * Pure function so it is unit-testable on the JVM.
+ */
+data class JumpBackInItem(
+    val song: Song,
+    val progress: Float
+)
+
+internal fun jumpBackInProgress(
+    playDurationMs: Long,
+    completedPlay: Boolean,
+    trackDurationMs: Long
+): Float {
+    if (completedPlay) return 1f
+    if (trackDurationMs <= 0 || playDurationMs <= 0) return 0f
+    return (playDurationMs.toFloat() / trackDurationMs).coerceIn(0f, 1f)
+}
+
+/**
+ * Builds "Made For You" mixes from listening history + liked songs.
+ * Pure function so it is unit-testable on the JVM.
+ */
+internal fun generateDailyMixes(
+    history: List<Song>,
+    liked: List<Song>,
+    limitPerMix: Int = 20,
+    maxMixes: Int = 4
+): List<DailyMix> {
+    if (history.isEmpty() && liked.isEmpty()) return emptyList()
+    val mixes = mutableListOf<DailyMix>()
+
+    val topGenres = (history + liked)
+        .groupBy { it.genre }
+        .filterKeys { it.isNotBlank() }
+        .entries
+        .sortedByDescending { it.value.size }
+        .take(2)
+    topGenres.forEach { (genre, songs) ->
+        val distinct = songs.distinctBy { it.id }.shuffled().take(limitPerMix)
+        if (distinct.isNotEmpty()) {
+            mixes += DailyMix(
+                id = "mix-genre-$genre",
+                title = "$genre Mix",
+                subtitle = "Picked from your recent listening",
+                songs = distinct
+            )
+        }
+    }
+
+    if (liked.isNotEmpty()) {
+        mixes += DailyMix(
+            id = "mix-liked",
+            title = "Liked Mix",
+            subtitle = "Songs you loved, on repeat",
+            songs = liked.distinctBy { it.id }.shuffled().take(limitPerMix)
+        )
+    }
+
+    if (mixes.isEmpty() && history.isNotEmpty()) {
+        mixes += DailyMix(
+            id = "mix-rediscover",
+            title = "Rediscover",
+            subtitle = "Dive back into your history",
+            songs = history.distinctBy { it.id }.shuffled().take(limitPerMix)
+        )
+    }
+
+    return mixes.take(maxMixes)
+}
 
 /**
  * Represents a genre for selection
@@ -230,7 +436,22 @@ data class HomeUiState(
     // State
     val isLoading: Boolean = true,
     val error: String? = null,
-    val preferredSource: MusicSource = MusicSource.BOTH
+    val preferredSource: MusicSource = MusicSource.BOTH,
+    // Per-section failures (section key -> message) for inline retry
+    val sectionErrors: Map<String, String> = emptyMap(),
+    // Per-section load state (section key -> state) so one slow section
+    // never forces full-screen loading or recomposition of the rest.
+    val sectionStates: Map<String, HomeSectionState> = emptyMap(),
+    // Visible window per home section (section key -> count). Rows render
+    // this many items; "Show more" grows the window via loadMore().
+    val visibleCount: Map<String, Int> = emptyMap(),
+    // Jump Back In: recently played songs with listening progress 0..1
+    // derived from stored play duration vs. track duration.
+    val jumpBackIn: List<JumpBackInItem> = emptyList(),
+    // Listening progress per song id (0..1) for progress-ring badges.
+    val songProgress: Map<String, Float> = emptyMap(),
+    // Made For You mixes generated from listening history
+    val dailyMixes: List<DailyMix> = emptyList()
 
 ) {
     companion object {
@@ -271,6 +492,159 @@ class HomeViewModel @Inject constructor(
     }
     
     private var lastUpdateTime: Long = 0L
+
+    // Content groups already loaded in this refresh cycle
+    private val loadedGroups = mutableSetOf<String>()
+
+    /**
+     * Public refresh function - reloads primary content; extended groups
+     * reload lazily the next time a screen needs them.
+     */
+    fun refresh() {
+        Log.d(TAG, "Manual refresh triggered")
+        loadedGroups.clear()
+        _uiState.update { it.copy(sectionErrors = emptyMap()) }
+        loadHomeContent()
+    }
+
+    /**
+     * Ensures the given content groups are loaded (each group loads at most
+     * once per refresh cycle). Screens call this for the data they display
+     * so home init only pays for PRIMARY content.
+     */
+    fun ensureGroupsLoaded(vararg groups: String) {
+        val missing = groups.distinct().filter { it !in loadedGroups }
+        if (missing.isEmpty()) return
+        missing.forEach { loadedGroups += it }
+        if (HomeGroups.PRIMARY in missing) loadHomeContent()
+        if (HomeGroups.SECONDARY in missing) loadSecondarySections()
+        if (HomeGroups.LANGUAGES_EXT in missing) loadExtendedLanguages()
+        if (HomeGroups.ARTISTS_EXT in missing) loadExtendedArtists()
+        if (HomeGroups.MOODS in missing) loadMoodSections()
+        if (HomeGroups.REGIONAL in missing) loadRegionalSongs()
+        if (HomeGroups.SPOTLIGHTS in missing) {
+            loadArtistSpotlights()
+            loadMoreArtistSpotlights()
+            loadMoreArtistCollections()
+        }
+        if (HomeGroups.CURATED in missing) {
+            loadCuratedPlaylists()
+            loadAllTimeFavorites()
+        }
+        if (HomeGroups.CHANNELS in missing) {
+            loadPriorityChannels()
+            loadVerifiedChannelSongs()
+        }
+        if (HomeGroups.INDIAN in missing) loadIndianPlaylists()
+        if (HomeGroups.INTERNATIONAL in missing) loadInternationalSongs()
+    }
+
+    /**
+     * Retries failed home sections. All home-rendered sections are
+     * PRIMARY-backed, so this simply reloads primary content without
+     * clearing what is already displayed.
+     */
+    fun retryFailedSections() {
+        _uiState.update { it.copy(sectionErrors = emptyMap(), error = null) }
+        loadHomeContent()
+    }
+
+    fun clearSectionErrors() {
+        _uiState.update { it.copy(sectionErrors = emptyMap()) }
+    }
+
+    private fun setSectionError(key: String, message: String?) {
+        _uiState.update { state ->
+            val errors = if (message == null) state.sectionErrors - key
+            else state.sectionErrors + (key to message)
+            val prev = state.sectionStates[key] ?: HomeSectionState()
+            val sections = state.sectionStates + (key to prev.copy(
+                isLoading = false,
+                error = message
+            ))
+            state.copy(sectionErrors = errors, sectionStates = sections)
+        }
+    }
+
+    private fun setSectionLoading(key: String, loading: Boolean) {
+        _uiState.update { state ->
+            val prev = state.sectionStates[key] ?: HomeSectionState()
+            state.copy(
+                sectionStates = state.sectionStates + (key to prev.copy(
+                    isLoading = loading,
+                    error = if (loading) null else prev.error
+                ))
+            )
+        }
+    }
+
+    private fun setSectionLoaded(key: String, count: Int) {
+        _uiState.update { state ->
+            val prev = state.sectionStates[key] ?: HomeSectionState()
+            state.copy(
+                sectionStates = state.sectionStates + (key to prev.copy(
+                    isLoading = false,
+                    itemCount = count,
+                    error = null
+                ))
+            )
+        }
+    }
+
+    /**
+     * Visible window for a home section row. Defaults to the section page
+     * size so rows render a bounded preview; grows via [loadMore].
+     */
+    fun visibleCountFor(sectionId: String): Int =
+        _uiState.value.visibleCount[sectionId] ?: pageSizeFor(sectionId)
+
+    /**
+     * Whether more items exist beyond the current visible window.
+     * Pure logic over the passed-in total so it stays unit-testable.
+     */
+    fun canLoadMore(sectionId: String, total: Int): Boolean =
+        visibleCountFor(sectionId) < total
+
+    /**
+     * Windowed slice for a home row. Paging lives here (not in the
+     * composable) so the UI only renders the visible window.
+     */
+    fun homeRowSongs(sectionId: String, songs: List<Song>): List<Song> =
+        songs.take(visibleCountFor(sectionId).coerceAtLeast(1))
+
+    fun <T> homeRowItems(sectionId: String, items: List<T>): List<T> =
+        items.take(visibleCountFor(sectionId).coerceAtLeast(1))
+
+    /**
+     * Grows a section's visible window by one page, clamped to [total].
+     */
+    fun loadMore(sectionId: String, total: Int) {
+        _uiState.update { state ->
+            val current = state.visibleCount[sectionId] ?: pageSizeFor(sectionId)
+            state.copy(
+                visibleCount = state.visibleCount + (
+                    sectionId to nextVisibleCount(current, total, sectionId)
+                )
+            )
+        }
+    }
+
+    /**
+     * Collapses a section back to its default preview window.
+     */
+    fun showLess(sectionId: String) {
+        _uiState.update { state ->
+            state.copy(visibleCount = state.visibleCount - sectionId)
+        }
+    }
+
+    /**
+     * Resume-aware refresh: reloads only when the 24h content is stale,
+     * so returning to Home is free when content is fresh.
+     */
+    fun refreshIfStale() {
+        checkAndLoadHomeContent()
+    }
     
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -302,15 +676,8 @@ class HomeViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Public refresh function - forces reload of home content
-     */
-    fun refresh() {
-        Log.d(TAG, "Manual refresh triggered")
-        loadHomeContent()
-    }
-    
     fun loadHomeContent() {
+        loadedGroups += HomeGroups.PRIMARY
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             Log.d(TAG, "Loading home content...")
@@ -332,10 +699,23 @@ class HomeViewModel @Inject constructor(
                 val newReleasesResult = newReleasesDeferred.await()
                 val playlistsResult = playlistsDeferred.await()
                 val albumsResult = albumsDeferred.await()
+
+                val newReleases = newReleasesResult.getOrNull()
+                val playlists = playlistsResult.getOrNull()
+                if (newReleases == null) {
+                    setSectionError("newReleases", "Couldn't load new releases")
+                } else {
+                    setSectionError("newReleases", null)
+                }
+                if (playlists == null) {
+                    setSectionError("playlists", "Couldn't load playlists")
+                } else {
+                    setSectionError("playlists", null)
+                }
                 
                 _uiState.value = _uiState.value.copy(
-                    newReleases = newReleasesResult.getOrNull() ?: emptyList(),
-                    featuredPlaylists = (playlistsResult.getOrNull() ?: emptyList()).filter { playlist ->
+                    newReleases = newReleases ?: emptyList(),
+                    featuredPlaylists = (playlists ?: emptyList()).filter { playlist ->
                         // Filter out problematic playlists that cause crashes
                         val hasValidSongs = playlist.songCount > 0
                         val isNotProblematic = !playlist.name.contains("1990s", ignoreCase = true) &&
@@ -347,27 +727,25 @@ class HomeViewModel @Inject constructor(
                     trendingAlbums = albumsResult.getOrNull() ?: emptyList(),
                     isLoading = false
                 )
+                setSectionLoaded(HomeSections.NEW_RELEASES, newReleases?.size ?: 0)
+                setSectionLoaded(
+                    HomeSections.PLAYLISTS,
+                    _uiState.value.featuredPlaylists.size
+                )
                 
                 Log.d(TAG, "Primary content loaded")
                 
                 // Update last update time after successful load
                 lastUpdateTime = System.currentTimeMillis()
                 
-                // Load secondary sections in background
-                loadSecondarySections()
+                // Primary sections rendered on home; extended groups load on
+                // demand via ensureGroupsLoaded() when a screen needs them.
+                loadPrimaryLanguages()
                 loadCharts()
                 loadArtists()
-                loadLanguageSections()
-                loadMoodSections()
-                loadArtistSpotlights()
-                loadIndianPlaylists()
                 loadRecentlyPlayed()
-                
-                // Load Top 500 Indian Music Channels priority content
-                loadPriorityChannels()
-                loadVerifiedChannelSongs()
+                loadDailyMixes()
 
-                
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading home content", e)
                 _uiState.value = _uiState.value.copy(
@@ -432,6 +810,9 @@ class HomeViewModel @Inject constructor(
         try {
             val recentSongs = recommendationDataSource.getQuickPicks(limit = 30).first()
             _uiState.value = _uiState.value.copy(quickPicksSongs = recentSongs)
+            setSectionError("quickPicks", null)
+            setSectionLoaded(HomeSections.QUICK_PICKS, recentSongs.size)
+            setSectionLoaded(HomeSections.RECOMMENDED, recentSongs.size)
             Log.d(TAG, "Loaded ${recentSongs.size} quick picks for 5x6 grid")
             
             // Get unique artists from recent songs
@@ -443,6 +824,7 @@ class HomeViewModel @Inject constructor(
             
         } catch (e: Exception) {
             Log.e(TAG, "Error loading quick picks", e)
+            setSectionError("quickPicks", "Couldn't load quick picks")
         }
     }
     
@@ -457,19 +839,6 @@ class HomeViewModel @Inject constructor(
     }
     
     private fun loadSecondarySections() {
-        // Telugu Songs
-        viewModelScope.launch {
-            try {
-                repository.getTeluguSongs().getOrNull()?.let { songs ->
-                    _uiState.value = _uiState.value.copy(teluguSongs = songs)
-                    Log.d(TAG, "Loaded ${songs.size} Telugu songs")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading Telugu songs", e)
-            }
-        }
-        
-        
         // ST Banjara/Lambadi - YouTube-only (Channel-filtered)
         viewModelScope.launch {
             try {
@@ -659,9 +1028,11 @@ class HomeViewModel @Inject constructor(
                 repository.getTop50Hindi().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Hindi = songs)
                     updateCharts()
+                    setSectionError("charts", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top 50 Hindi", e)
+                setSectionError("charts", "Couldn't load charts")
             }
         }
         
@@ -671,9 +1042,11 @@ class HomeViewModel @Inject constructor(
                 repository.searchSongsWithLimit("top english songs 2024", 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50English = songs)
                     updateCharts()
+                    setSectionError("charts", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top 50 English", e)
+                setSectionError("charts", "Couldn't load charts")
             }
         }
         
@@ -683,9 +1056,11 @@ class HomeViewModel @Inject constructor(
                 repository.searchSongsWithLimit("top telugu songs 2024", 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Telugu = songs)
                     updateCharts()
+                    setSectionError("charts", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top 50 Telugu", e)
+                setSectionError("charts", "Couldn't load charts")
             }
         }
         
@@ -695,9 +1070,11 @@ class HomeViewModel @Inject constructor(
                 repository.searchSongsWithLimit("top tamil songs 2024", 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Tamil = songs)
                     updateCharts()
+                    setSectionError("charts", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top 50 Tamil", e)
+                setSectionError("charts", "Couldn't load charts")
             }
         }
         
@@ -707,9 +1084,11 @@ class HomeViewModel @Inject constructor(
                 repository.searchSongsWithLimit("top punjabi songs 2024", 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Punjabi = songs)
                     updateCharts()
+                    setSectionError("charts", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top 50 Punjabi", e)
+                setSectionError("charts", "Couldn't load charts")
             }
         }
     }
@@ -735,6 +1114,7 @@ class HomeViewModel @Inject constructor(
         }
         
         _uiState.value = state.copy(charts = charts)
+        setSectionLoaded(HomeSections.CHARTS, charts.size)
     }
     
     private fun loadArtists() {
@@ -772,16 +1152,26 @@ class HomeViewModel @Inject constructor(
 
                 repository.getTopArtists().getOrNull()?.let { artists ->
                     val combined = (extendedArtists + artists).distinctBy { it.name.lowercase() }
-                    _uiState.value = _uiState.value.copy(topArtists = combined)
+                    _uiState.update { it.copy(topArtists = combined) }
+                    setSectionError("artists", null)
+                    setSectionLoaded(HomeSections.ARTISTS, combined.size)
                     Log.d(TAG, "Loaded ${combined.size} Top Artists (extended)")
                 } ?: run {
-                    _uiState.value = _uiState.value.copy(topArtists = extendedArtists)
+                    _uiState.update { it.copy(topArtists = extendedArtists) }
+                    setSectionError("artists", null)
+                    setSectionLoaded(HomeSections.ARTISTS, extendedArtists.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Top Artists", e)
+                setSectionError("artists", "Couldn't load artists")
             }
         }
-        
+    }
+
+    /**
+     * Extended artists, loaded on demand (Artists screen, See All).
+     */
+    private fun loadExtendedArtists() {
         viewModelScope.launch {
             try {
                 repository.searchArtists("recommended indian artists").getOrNull()?.let { artists ->
@@ -793,29 +1183,67 @@ class HomeViewModel @Inject constructor(
         }
     }
     
-    private fun loadLanguageSections() {
+    /**
+     * Primary languages rendered on home (Telugu, Hindi, Tamil).
+     */
+    private fun loadPrimaryLanguages() {
+        // Telugu Songs
+        viewModelScope.launch {
+            try {
+                val songs = repository.getTeluguSongs().getOrNull()
+                if (songs == null) {
+                    setSectionError("telugu", "Couldn't load Telugu songs")
+                } else {
+                    _uiState.update { it.copy(teluguSongs = songs) }
+                    setSectionError("telugu", null)
+                    setSectionLoaded(HomeSections.TELUGU, songs.size)
+                    Log.d(TAG, "Loaded ${songs.size} Telugu songs")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading Telugu songs", e)
+                setSectionError("telugu", "Couldn't load Telugu songs")
+            }
+        }
+
         // Hindi
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("latest hindi songs", 20).getOrNull()?.let { songs ->
-                    _uiState.value = _uiState.value.copy(hindiSongs = songs)
+                val songs = repository.searchSongsWithLimit("latest hindi songs", 20).getOrNull()
+                if (songs == null) {
+                    setSectionError("hindi", "Couldn't load Hindi songs")
+                } else {
+                    _uiState.update { it.copy(hindiSongs = songs) }
+                    setSectionError("hindi", null)
+                    setSectionLoaded(HomeSections.HINDI, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Hindi songs", e)
+                setSectionError("hindi", "Couldn't load Hindi songs")
             }
         }
-        
+
         // Tamil
         viewModelScope.launch {
             try {
-                repository.getTamilSongs().getOrNull()?.let { songs ->
-                    _uiState.value = _uiState.value.copy(tamilSongs = songs)
+                val songs = repository.getTamilSongs().getOrNull()
+                if (songs == null) {
+                    setSectionError("tamil", "Couldn't load Tamil songs")
+                } else {
+                    _uiState.update { it.copy(tamilSongs = songs) }
+                    setSectionError("tamil", null)
+                    setSectionLoaded(HomeSections.TAMIL, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Tamil songs", e)
+                setSectionError("tamil", "Couldn't load Tamil songs")
             }
         }
-        
+    }
+
+    /**
+     * Extended languages, loaded on demand (Artists screen, See All).
+     */
+    private fun loadExtendedLanguages() {
         // Punjabi
         viewModelScope.launch {
             try {
@@ -1118,18 +1546,73 @@ class HomeViewModel @Inject constructor(
         }
     }
     
-    private fun loadRecentlyPlayed() {
+    /**
+     * Made For You mixes from listening history + liked songs.
+     * Part of PRIMARY (rendered on home).
+     */
+    private fun loadDailyMixes() {
         viewModelScope.launch {
             try {
-                val recentHistory = historyDao.getRecentHistory(15).first()
-                val recentSongIds = recentHistory.map { it.songId }
-                val recentSongs = recentSongIds.mapNotNull { songId ->
-                    songDao.getSongById(songId)?.toSong()
+                val history = songDao.getRecentlyPlayed(100).first().mapNotNull { it.toSong() }
+                val liked = songDao.getLikedSongsList(100).mapNotNull { it.toSong() }
+                val mixes = generateDailyMixes(history, liked)
+                _uiState.update { it.copy(dailyMixes = mixes) }
+                setSectionError("mixes", null)
+                setSectionLoaded(HomeSections.DAILY_MIX, mixes.size)
+                Log.d(TAG, "Generated ${mixes.size} daily mixes")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating daily mixes", e)
+                setSectionError("mixes", "Couldn't load your mixes")
+            }
+        }
+    }
+
+    private fun loadRecentlyPlayed() {
+        viewModelScope.launch {
+            setSectionLoading(HomeSections.RECENT, true)
+            try {
+                val recentHistory = historyDao.getRecentHistory(30).first()
+                // Keep the latest history entry per song so progress reflects
+                // the most recent listen, preserving recency order.
+                val latestBySong = linkedMapOf<String, com.reon.music.data.database.entities.ListenHistoryEntity>()
+                recentHistory.forEach { entry ->
+                    latestBySong.putIfAbsent(entry.songId, entry)
                 }
-                _uiState.value = _uiState.value.copy(recentlyPlayedSongs = recentSongs)
+                val recentSongs = latestBySong.keys.mapNotNull { songId ->
+                    songDao.getSongById(songId)?.toSong()
+                }.take(16)
+                val progressById = mutableMapOf<String, Float>()
+                val jumpBackIn = mutableListOf<JumpBackInItem>()
+                latestBySong.forEach { (songId, entry) ->
+                    val song = recentSongs.firstOrNull { it.id == songId } ?: return@forEach
+                    // Song.duration is seconds in this codebase (formatted as m:ss).
+                    val trackMs = if (song.duration > 0) song.duration * 1000L else 0L
+                    val progress = jumpBackInProgress(
+                        entry.playDuration,
+                        entry.completedPlay,
+                        trackMs
+                    )
+                    if (progress > 0f) {
+                        progressById[songId] = progress
+                        // Jump Back In surfaces unfinished listens first.
+                        if (progress < 1f) jumpBackIn += JumpBackInItem(song, progress)
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    recentlyPlayedSongs = recentSongs,
+                    jumpBackIn = (jumpBackIn + recentSongs
+                        .filter { it.id !in progressById }
+                        .take((10 - jumpBackIn.size).coerceAtLeast(0))
+                        .map { JumpBackInItem(it, 0f) }
+                    ).take(10),
+                    songProgress = progressById
+                )
+                setSectionError("recent", null)
+                setSectionLoaded(HomeSections.RECENT, recentSongs.size)
                 Log.d(TAG, "Loaded ${recentSongs.size} recently played songs")
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading recently played", e)
+                setSectionError("recent", "Couldn't load recently played")
             }
         }
     }

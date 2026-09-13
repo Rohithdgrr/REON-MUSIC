@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.reon.music.core.model.*
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.groupsForChartType
 import com.reon.music.ui.viewmodels.LibraryViewModel
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import com.reon.music.data.database.entities.PlaylistEntity
@@ -116,12 +117,15 @@ fun ChartDetailScreen(
             "viral", "trending" -> uiState.trendingNowSongs
             
             // User curated
-            "recent" -> uiState.recentlyPlayedSongs
+            "recent", "recently-played" -> uiState.recentlyPlayedSongs
             "quick-picks" -> uiState.quickPicksSongs
             "recommended" -> uiState.quickPicksSongs
             "new" -> uiState.newReleases
             "alltimefavorite" -> uiState.allTimeFavorites
             "mostlistening" -> uiState.mostListeningSongs
+            "daily-mix" -> uiState.dailyMixes.flatMap { it.songs }.distinctBy { it.id }
+            // Genres overview: combine new releases + quick picks as a browseable mix
+            "genres" -> (uiState.quickPicksSongs + uiState.newReleases)
             
             // Artist spotlights
             "arijitsingh" -> uiState.arijitSinghSongs
@@ -142,14 +146,35 @@ fun ChartDetailScreen(
             "honeysingh" -> uiState.honeysingh
             "kanikakapoor" -> uiState.kanikKapoor
             
-            else -> uiState.quickPicksSongs + uiState.newReleases
+            // Genre detail (genre-<id>): resolved via on-demand search below;
+            // fall back to cached genre songs when available.
+            else -> if (chartType.lowercase().startsWith("genre-")) uiState.genreSongs
+                else uiState.quickPicksSongs + uiState.newReleases
         }.distinctBy { it.id }
     }
     
     // Initialize with initial songs
     LaunchedEffect(chartType) {
+        // Backing data for this chart type loads on demand
+        homeViewModel.ensureGroupsLoaded(*groupsForChartType(chartType).toTypedArray())
         if (chartType.startsWith("pl")) { // Assuming JioSaavn playlist IDs start with "pl"
             homeViewModel.getPlaylistSongs(chartType)
+        } else if (chartType.lowercase().startsWith("genre-")) {
+            // Genre detail: search on demand so the screen never shows
+            // unrelated fallback content.
+            allSongs = initialSongs
+            currentPage = 1
+            hasMore = true
+            isUnlimitedMode = false
+            try {
+                val results = homeViewModel.searchSongsForChart("$chartTitle songs", 50)
+                if (results.isNotEmpty()) {
+                    allSongs = results.distinctBy { it.id }
+                }
+            } catch (_: Exception) {
+                // Keep initial songs on failure
+            }
+            return@LaunchedEffect
         } else {
             allSongs = initialSongs
         }
@@ -181,7 +206,9 @@ fun ChartDetailScreen(
                 "telugu" -> "telugu songs"
                 "hindi" -> "hindi songs"
                 "english" -> "english songs"
-                else -> chartTitle.lowercase()
+                "genres" -> "pop songs"
+                else -> if (chartType.lowercase().startsWith("genre-")) "$chartTitle songs"
+                    else chartTitle.lowercase()
             }
             
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -213,7 +240,9 @@ fun ChartDetailScreen(
                 "dj" -> "dj remix"
                 "new" -> "new releases"
                 "banjara" -> "banjara songs"
-                else -> chartTitle.lowercase()
+                "genres" -> "pop songs"
+                else -> if (chartType.lowercase().startsWith("genre-")) "$chartTitle songs"
+                    else chartTitle.lowercase()
             }
             
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

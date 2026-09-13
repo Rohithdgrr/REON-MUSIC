@@ -38,8 +38,11 @@ class NeonSyncClient @Inject constructor(
         private const val NEON_HOST = "ep-odd-grass-a19v097i-pooler.ap-southeast-1.aws.neon.tech"
         private const val NEON_DATABASE = "neondb"
         private const val NEON_USER = "neondb_owner"
-        private val NEON_PASSWORD: String by lazy {
-            System.getenv("NEON_PASSWORD") ?: error("NEON_PASSWORD environment variable not set")
+        // Null when unset: executeQuery() fails the call with a clear
+        // message instead of crashing. All callers surface it as
+        // Result.failure, never as an app crash.
+        private val NEON_PASSWORD: String? by lazy {
+            System.getenv("NEON_PASSWORD")
         }
         
         // We'll use Neon's SQL HTTP API
@@ -146,10 +149,10 @@ class NeonSyncClient @Inject constructor(
         try {
             val sql = """
                 INSERT INTO synced_songs (id, device_id, title, artist, album, artwork_url, source, is_liked, synced_at)
-                VALUES ('$songId', '$deviceId', '${title.escapeSql()}', '${artist.escapeSql()}', 
+                VALUES ('${validateId(songId, "songId")}', '${validateId(deviceId, "deviceId")}', '${title.escapeSql()}', '${artist.escapeSql()}', 
                         ${album?.let { "'${it.escapeSql()}'" } ?: "NULL"},
-                        ${artworkUrl?.let { "'$it'" } ?: "NULL"},
-                        '$source', $isLiked, CURRENT_TIMESTAMP)
+                        ${sanitizeUrl(artworkUrl)},
+                        '${validateId(source, "source")}', $isLiked, CURRENT_TIMESTAMP)
                 ON CONFLICT (id) DO UPDATE SET
                     is_liked = $isLiked,
                     synced_at = CURRENT_TIMESTAMP;
@@ -168,7 +171,7 @@ class NeonSyncClient @Inject constructor(
      */
     suspend fun getLikedSongs(deviceId: String): Result<List<SyncedSong>> = withContext(Dispatchers.IO) {
         try {
-            val sql = "SELECT * FROM synced_songs WHERE device_id = '$deviceId' AND is_liked = true ORDER BY synced_at DESC"
+            val sql = "SELECT * FROM synced_songs WHERE device_id = '${validateId(deviceId, "deviceId")}' AND is_liked = true ORDER BY synced_at DESC"
             val result = executeQuery(sql)
             
             // Parse result
@@ -194,14 +197,14 @@ class NeonSyncClient @Inject constructor(
         try {
             val sql = """
                 INSERT INTO synced_playlists (device_id, local_id, title, description, thumbnail, track_count, updated_at)
-                VALUES ('$deviceId', $localId, '${title.escapeSql()}', 
+                VALUES ('${validateId(deviceId, "deviceId")}', $localId, '${title.escapeSql()}', 
                         ${description?.let { "'${it.escapeSql()}'" } ?: "NULL"},
-                        ${thumbnail?.let { "'$it'" } ?: "NULL"},
+                        ${sanitizeUrl(thumbnail)},
                         $trackCount, CURRENT_TIMESTAMP)
                 ON CONFLICT (device_id, local_id) DO UPDATE SET
                     title = '${title.escapeSql()}',
                     description = ${description?.let { "'${it.escapeSql()}'" } ?: "NULL"},
-                    thumbnail = ${thumbnail?.let { "'$it'" } ?: "NULL"},
+                    thumbnail = ${sanitizeUrl(thumbnail)},
                     track_count = $trackCount,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING id;
@@ -229,7 +232,7 @@ class NeonSyncClient @Inject constructor(
         try {
             val sql = """
                 INSERT INTO synced_history (device_id, song_id, played_at, play_duration, completed_play)
-                VALUES ('$deviceId', '$songId', to_timestamp($playedAt / 1000.0), $playDuration, $completedPlay);
+                VALUES ('${validateId(deviceId, "deviceId")}', '${validateId(songId, "songId")}', to_timestamp($playedAt / 1000.0), $playDuration, $completedPlay);
             """.trimIndent()
             
             executeQuery(sql)
@@ -251,7 +254,7 @@ class NeonSyncClient @Inject constructor(
                     SUM(play_duration) as total_duration,
                     COUNT(DISTINCT song_id) as unique_songs
                 FROM synced_history 
-                WHERE device_id = '$deviceId';
+                WHERE device_id = '${validateId(deviceId, "deviceId")}';
             """.trimIndent()
             
             val result = executeQuery(sql)
@@ -267,9 +270,11 @@ class NeonSyncClient @Inject constructor(
      * Execute SQL query against Neon
      */
     private suspend fun executeQuery(sql: String): String {
+        val password = NEON_PASSWORD
+            ?: throw IllegalStateException("NEON_PASSWORD environment variable not set")
         val response = httpClient.post(NEON_API_URL) {
             contentType(ContentType.Application.Json)
-            basicAuth(NEON_USER, NEON_PASSWORD)
+            basicAuth(NEON_USER, password)
             setBody(json.encodeToString(NeonQueryRequest(sql)))
         }
         
@@ -291,6 +296,23 @@ class NeonSyncClient @Inject constructor(
     
     private fun String.escapeSql(): String {
         return this.replace("'", "''")
+    }
+
+    // IDs/columns interpolated into SQL must match an allowlist so a quote
+    // can never break out of the literal. Free-text fields use escapeSql().
+    private fun validateId(value: String, name: String): String {
+        require(value.matches(Regex("[A-Za-z0-9_.:@-]{1,255}"))) {
+            "Invalid $name: $value"
+        }
+        return value
+    }
+
+    // URLs are stored only when http(s); anything else becomes SQL NULL
+    // instead of a broken (or hostile) literal.
+    private fun sanitizeUrl(url: String?): String {
+        if (url == null) return "NULL"
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return "NULL"
+        return "'${url.escapeSql()}'"
     }
 }
 

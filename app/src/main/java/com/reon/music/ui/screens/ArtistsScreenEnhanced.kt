@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Song
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.HomeGroups
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -68,6 +69,11 @@ fun ArtistsScreenEnhanced(
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
+
+    // Extended language/artist data loads on demand
+    LaunchedEffect(Unit) {
+        homeViewModel.ensureGroupsLoaded(HomeGroups.LANGUAGES_EXT, HomeGroups.ARTISTS_EXT)
+    }
     
     // Filter state
     var selectedLanguage by remember { mutableStateOf("All") }

@@ -60,9 +60,13 @@ class DownloadManager @Inject constructor(
             .addTag("download_${song.id}")
             .build()
         
+        // REPLACE (not KEEP): every call here is an explicit user or
+        // cache action meaning "make sure this is downloaded". KEEP would
+        // silently drop the request while a previous attempt is still
+        // queued or backing off, stranding stuck downloads with no retry.
         workManager.enqueueUniqueWork(
             "download_${song.id}",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request
         )
         

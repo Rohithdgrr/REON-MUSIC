@@ -6,7 +6,12 @@
 
 package com.reon.music
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -31,6 +36,12 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // Playback/sync notifications are dropped on Android 13+ without this.
+    // Denial is non-fatal: notifications simply stay silent.
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     companion object {
         // Minimum time the splash is kept visible for branding.
         // NOTE: this uses a suspending delay on a background coroutine — it
@@ -54,6 +65,15 @@ class MainActivity : ComponentActivity() {
         }
         
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         
         WindowCompat.setDecorFitsSystemWindows(window, false)
         enableEdgeToEdge()

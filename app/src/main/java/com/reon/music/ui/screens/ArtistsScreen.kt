@@ -35,6 +35,7 @@ import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Song
 import com.reon.music.data.network.youtube.IndianMusicChannels
 import com.reon.music.ui.viewmodels.HomeViewModel
+import com.reon.music.ui.viewmodels.HomeGroups
 import com.reon.music.ui.viewmodels.PlayerViewModel
 import kotlinx.coroutines.launch
 
@@ -72,6 +73,11 @@ fun ArtistsScreen(
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+
+    // Extended language/artist data loads on demand
+    LaunchedEffect(Unit) {
+        homeViewModel.ensureGroupsLoaded(HomeGroups.LANGUAGES_EXT, HomeGroups.ARTISTS_EXT)
+    }
     
     // Filter state
     var selectedCategory by remember { mutableStateOf("All") }
@@ -196,8 +202,9 @@ private fun ClayTopAppBar(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
                     placeholder = { Text("Search artists...") },
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.Transparent,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = AccentRed,
                         unfocusedIndicatorColor = Color.Transparent
                     ),
