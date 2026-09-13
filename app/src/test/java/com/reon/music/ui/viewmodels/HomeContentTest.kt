@@ -12,8 +12,8 @@ class HomeGroupsTest {
     @Test
     fun `primary chart types map to primary`() {
         listOf(
-            "recent", "quick-picks", "recommended", "new", "telugu",
-            "hindi", "tamil", "charts", "chart", "playlists", "daily-mix"
+            "recent", "quick-picks", "recommended", "mostplayed", "new", "albums",
+            "telugu", "hindi", "tamil", "charts", "chart", "playlists", "daily-mix"
         ).forEach {
             assertEquals(listOf(HomeGroups.PRIMARY), groupsForChartType(it))
         }
@@ -100,6 +100,10 @@ class HomePaginationTest {
         assertEquals(5, pageSizeFor(HomeSections.CHARTS))
         assertEquals(10, pageSizeFor(HomeSections.NEW_RELEASES))
         assertEquals(20, pageSizeFor(HomeSections.PLAYLISTS))
+        assertEquals(10, pageSizeFor(HomeSections.MOST_PLAYED))
+        assertEquals(10, pageSizeFor(HomeSections.TRENDING_ALBUMS))
+        assertEquals(10, pageSizeFor(HomeSections.PUNJABI))
+        assertEquals(10, pageSizeFor(HomeSections.ARIJIT))
     }
 
     @Test

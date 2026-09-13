@@ -577,7 +577,18 @@ fun HomeScreen(
             uiState.newReleases.isNotEmpty() ||
             uiState.featuredPlaylists.isNotEmpty() ||
             uiState.jumpBackIn.isNotEmpty() ||
-            uiState.charts.isNotEmpty()
+            uiState.charts.isNotEmpty() ||
+            uiState.mostPlayedSongs.isNotEmpty() ||
+            uiState.trendingAlbums.isNotEmpty() ||
+            uiState.allTimeFavorites.isNotEmpty() ||
+            uiState.trendingNowSongs.isNotEmpty() ||
+            uiState.punjabiSongs.isNotEmpty() ||
+            uiState.englishSongs.isNotEmpty() ||
+            uiState.internationalHits.isNotEmpty() ||
+            uiState.partySongs.isNotEmpty() ||
+            uiState.romanticSongs.isNotEmpty() ||
+            uiState.arijitSinghSongs.isNotEmpty() ||
+            uiState.arRahmanSongs.isNotEmpty()
 
         Box(
             modifier = Modifier
@@ -802,6 +813,43 @@ fun HomeScreen(
                 }
             }
             
+            // Most Played Section
+            if (uiState.mostPlayedSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Most Played",
+                        onSeeAllClick = { onSeeAllClick("mostplayed") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.MOST_PLAYED,
+                            uiState.mostPlayedSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.MOST_PLAYED,
+                        uiState.mostPlayedSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.MOST_PLAYED,
+                                    uiState.mostPlayedSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
             // Charts Section
             if (uiState.charts.isNotEmpty()) {
                 item {
@@ -839,6 +887,115 @@ fun HomeScreen(
                         sharedTransitionScope = sharedTransitionScope,
                         sharedVisibilityScope = sharedVisibilityScope
                     )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.NEW_RELEASES,
+                        uiState.newReleases.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.NEW_RELEASES,
+                                    uiState.newReleases.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Trending Albums Section
+            if (uiState.trendingAlbums.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Trending Albums",
+                        showSeeAll = false
+                    )
+                }
+                item {
+                    AlbumsRow(
+                        albums = homeViewModel.homeRowItems(
+                            com.reon.music.ui.viewmodels.HomeSections.TRENDING_ALBUMS,
+                            uiState.trendingAlbums
+                        ),
+                        onAlbumClick = onAlbumClick
+                    )
+                }
+            }
+
+            // All Time Favorites Section (liked songs)
+            if (uiState.allTimeFavorites.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "All Time Favorites",
+                        onSeeAllClick = { onSeeAllClick("alltimefavorite") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.ALL_TIME_FAVORITES,
+                            uiState.allTimeFavorites
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ALL_TIME_FAVORITES,
+                        uiState.allTimeFavorites.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ALL_TIME_FAVORITES,
+                                    uiState.allTimeFavorites.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Trending Now Section (viral hits)
+            if (uiState.trendingNowSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Trending Now",
+                        onSeeAllClick = { onSeeAllClick("trending") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.TRENDING_NOW,
+                            uiState.trendingNowSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.TRENDING_NOW,
+                        uiState.trendingNowSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.TRENDING_NOW,
+                                    uiState.trendingNowSongs.size
+                                )
+                            }
+                        )
+                    }
                 }
             }
 
@@ -967,6 +1124,265 @@ fun HomeScreen(
                                 homeViewModel.loadMore(
                                     com.reon.music.ui.viewmodels.HomeSections.TAMIL,
                                     uiState.tamilSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Punjabi Hits Section
+            if (uiState.punjabiSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Punjabi Hits",
+                        onSeeAllClick = { onSeeAllClick("punjabi") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.PUNJABI,
+                            uiState.punjabiSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.PUNJABI,
+                        uiState.punjabiSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.PUNJABI,
+                                    uiState.punjabiSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // English Hits Section
+            if (uiState.englishSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "English Hits",
+                        onSeeAllClick = { onSeeAllClick("english") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.ENGLISH,
+                            uiState.englishSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ENGLISH,
+                        uiState.englishSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ENGLISH,
+                                    uiState.englishSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // International Hits Section
+            if (uiState.internationalHits.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "International Hits",
+                        onSeeAllClick = { onSeeAllClick("international") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.INTERNATIONAL,
+                            uiState.internationalHits
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.INTERNATIONAL,
+                        uiState.internationalHits.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.INTERNATIONAL,
+                                    uiState.internationalHits.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Party Hits Section
+            if (uiState.partySongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Party Hits",
+                        onSeeAllClick = { onSeeAllClick("party") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.PARTY,
+                            uiState.partySongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.PARTY,
+                        uiState.partySongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.PARTY,
+                                    uiState.partySongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Romantic Hits Section
+            if (uiState.romanticSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Romantic Hits",
+                        onSeeAllClick = { onSeeAllClick("romantic") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.ROMANTIC,
+                            uiState.romanticSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ROMANTIC,
+                        uiState.romanticSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ROMANTIC,
+                                    uiState.romanticSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Arijit Singh Essentials Section
+            if (uiState.arijitSinghSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "Arijit Singh Essentials",
+                        onSeeAllClick = { onSeeAllClick("arijitsingh") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.ARIJIT,
+                            uiState.arijitSinghSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ARIJIT,
+                        uiState.arijitSinghSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ARIJIT,
+                                    uiState.arijitSinghSongs.size
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            // A.R. Rahman Essentials Section
+            if (uiState.arRahmanSongs.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "A.R. Rahman Essentials",
+                        onSeeAllClick = { onSeeAllClick("arrahman") }
+                    )
+                }
+                item {
+                    SongsRow(
+                        songs = homeViewModel.homeRowSongs(
+                            com.reon.music.ui.viewmodels.HomeSections.ARRAHMAN,
+                            uiState.arRahmanSongs
+                        ),
+                        onSongClick = onSongClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        sharedVisibilityScope = sharedVisibilityScope
+                    )
+                }
+                if (homeViewModel.canLoadMore(
+                        com.reon.music.ui.viewmodels.HomeSections.ARRAHMAN,
+                        uiState.arRahmanSongs.size
+                    )
+                ) {
+                    item {
+                        ShowMoreButton(
+                            onClick = {
+                                homeViewModel.loadMore(
+                                    com.reon.music.ui.viewmodels.HomeSections.ARRAHMAN,
+                                    uiState.arRahmanSongs.size
                                 )
                             }
                         )
@@ -1153,7 +1569,8 @@ private fun QuickActionCard(
 @Composable
 private fun SectionHeader(
     title: String,
-    onSeeAllClick: () -> Unit
+    onSeeAllClick: () -> Unit = {},
+    showSeeAll: Boolean = true
 ) {
     AnimatedVisibility(
         visible = true,
@@ -1175,13 +1592,15 @@ private fun SectionHeader(
             fontWeight = FontWeight.Bold,
             color = rememberHomeColors().textPrimary
         )
-        
+
+        if (showSeeAll) {
         TextButton(onClick = onSeeAllClick) {
             Text(
                 text = "See all",
                 style = MaterialTheme.typography.labelMedium,
                 color = AccentOrange
             )
+        }
         }
     }
     }
@@ -1709,6 +2128,78 @@ private fun ArtistCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun AlbumsRow(
+    albums: List<com.reon.music.core.model.Album>,
+    onAlbumClick: (com.reon.music.core.model.Album) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(albums, key = { it.id }, contentType = { "album" }) { album ->
+            AlbumCard(
+                album = album,
+                onClick = { onAlbumClick(album) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumCard(
+    album: com.reon.music.core.model.Album,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .pressScaleClickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(AccentOrange, AccentOrangeDeep)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                OptimizedAsyncImage(
+                    imageUrl = album.artworkUrl,
+                    contentDescription = "Artwork for ${album.name}",
+                    quality = ImageQuality.MEDIUM,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = album.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = rememberHomeColors().textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = album.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = rememberHomeColors().textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 

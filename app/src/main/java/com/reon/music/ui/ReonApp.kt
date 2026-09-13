@@ -294,6 +294,96 @@ fun ReonApp(
                                             )
                                         }
 
+                                        "mostplayed" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "mostplayed",
+                                                    chartTitle = "Most Played"
+                                                )
+                                            )
+                                        }
+
+                                        "alltimefavorite" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "alltimefavorite",
+                                                    chartTitle = "All Time Favorites"
+                                                )
+                                            )
+                                        }
+
+                                        "trending" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "trending",
+                                                    chartTitle = "Trending Now"
+                                                )
+                                            )
+                                        }
+
+                                        "punjabi" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "punjabi",
+                                                    chartTitle = "Punjabi Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "english" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "english",
+                                                    chartTitle = "English Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "international" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "international",
+                                                    chartTitle = "International Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "party" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "party",
+                                                    chartTitle = "Party Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "romantic" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "romantic",
+                                                    chartTitle = "Romantic Hits"
+                                                )
+                                            )
+                                        }
+
+                                        "arijitsingh" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "arijitsingh",
+                                                    chartTitle = "Arijit Singh Essentials"
+                                                )
+                                            )
+                                        }
+
+                                        "arrahman" -> {
+                                            navController.navigate(
+                                                ReonDestination.ChartDetail.createRoute(
+                                                    chartType = "arrahman",
+                                                    chartTitle = "A.R. Rahman Essentials"
+                                                )
+                                            )
+                                        }
+
                                         "artists" -> navController.navigate(ReonDestination.Artists.route)
                                         "playlists" -> navController.navigate(ReonDestination.FeaturedPlaylists.route)
                                         "charts" -> navController.navigate(

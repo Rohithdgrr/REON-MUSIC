@@ -86,7 +86,8 @@ internal fun groupsForChartType(chartType: String): List<String> {
     if (key.startsWith("genre-") || key == "genres") return emptyList()
     return when (key) {
         // Backed by PRIMARY (loaded at home init)
-        "recent", "recently-played", "quick-picks", "recommended", "new", "telugu", "hindi",
+        "recent", "recently-played", "quick-picks", "recommended", "mostplayed",
+        "new", "albums", "telugu", "hindi",
         "tamil", "charts", "chart", "playlists", "daily-mix" -> listOf(HomeGroups.PRIMARY)
         // Language extras
         "english", "punjabi" -> listOf(HomeGroups.LANGUAGES_EXT)
@@ -133,12 +134,23 @@ object HomeSections {
     const val QUICK_PICKS = "quick-picks"
     const val DAILY_MIX = "daily-mix"
     const val RECOMMENDED = "recommended"
+    const val MOST_PLAYED = "mostplayed"
     const val CHARTS = "charts"
     const val NEW_RELEASES = "new"
+    const val TRENDING_ALBUMS = "albums"
+    const val ALL_TIME_FAVORITES = "alltimefavorite"
+    const val TRENDING_NOW = "trending"
     const val GENRES = "genres"
     const val TELUGU = "telugu"
     const val HINDI = "hindi"
     const val TAMIL = "tamil"
+    const val PUNJABI = "punjabi"
+    const val ENGLISH = "english"
+    const val INTERNATIONAL = "international"
+    const val PARTY = "party"
+    const val ROMANTIC = "romantic"
+    const val ARIJIT = "arijitsingh"
+    const val ARRAHMAN = "arrahman"
     const val ARTISTS = "artists"
     const val PLAYLISTS = "playlists"
     const val JUMP_BACK_IN = "jump-back-in"
@@ -153,12 +165,23 @@ internal fun pageSizeFor(sectionId: String): Int = when (sectionId) {
     HomeSections.RECENT -> 16
     HomeSections.QUICK_PICKS -> 6
     HomeSections.RECOMMENDED -> 10
+    HomeSections.MOST_PLAYED -> 10
     HomeSections.CHARTS -> 5
     HomeSections.NEW_RELEASES -> 10
+    HomeSections.TRENDING_ALBUMS -> 10
+    HomeSections.ALL_TIME_FAVORITES -> 10
+    HomeSections.TRENDING_NOW -> 10
     HomeSections.GENRES -> 12
     HomeSections.TELUGU -> 10
     HomeSections.HINDI -> 10
     HomeSections.TAMIL -> 10
+    HomeSections.PUNJABI -> 10
+    HomeSections.ENGLISH -> 10
+    HomeSections.INTERNATIONAL -> 10
+    HomeSections.PARTY -> 10
+    HomeSections.ROMANTIC -> 10
+    HomeSections.ARIJIT -> 10
+    HomeSections.ARRAHMAN -> 10
     HomeSections.ARTISTS -> 10
     HomeSections.PLAYLISTS -> 20
     HomeSections.JUMP_BACK_IN -> 10
@@ -732,6 +755,10 @@ class HomeViewModel @Inject constructor(
                     HomeSections.PLAYLISTS,
                     _uiState.value.featuredPlaylists.size
                 )
+                setSectionLoaded(
+                    HomeSections.TRENDING_ALBUMS,
+                    _uiState.value.trendingAlbums.size
+                )
                 
                 Log.d(TAG, "Primary content loaded")
                 
@@ -745,6 +772,7 @@ class HomeViewModel @Inject constructor(
                 loadArtists()
                 loadRecentlyPlayed()
                 loadDailyMixes()
+                loadHomeExtraSections()
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading home content", e)
@@ -832,12 +860,51 @@ class HomeViewModel @Inject constructor(
         try {
             val songs = recommendationDataSource.getMostPlayed(limit = 15).first()
             _uiState.value = _uiState.value.copy(mostPlayedSongs = songs)
+            setSectionLoaded(HomeSections.MOST_PLAYED, songs.size)
             Log.d(TAG, "Loaded ${songs.size} most played songs")
         } catch (e: Exception) {
             Log.e(TAG, "Error loading most played", e)
         }
     }
     
+    /**
+     * Extra home rows (languages, moods, spotlights, favorites, trending).
+     * Each loader is independent and updates its own section state, so one
+     * slow source never blocks the rest of the home screen.
+     */
+    private fun loadHomeExtraSections() {
+        loadExtendedLanguages()
+        loadMoodSections()
+        loadArtistSpotlights()
+        loadAllTimeFavorites()
+        loadInternationalHits()
+    }
+
+    /**
+     * International hits for the home row (single targeted search; the full
+     * international collection still loads on demand via ChartDetail).
+     */
+    private fun loadInternationalHits() {
+        viewModelScope.launch {
+            setSectionLoading(HomeSections.INTERNATIONAL, true)
+            try {
+                val songs = repository.searchSongsWithLimit(
+                    "international hits english pop", 20
+                ).getOrNull()
+                if (songs != null) {
+                    _uiState.update { it.copy(internationalHits = songs) }
+                    setSectionLoaded(HomeSections.INTERNATIONAL, songs.size)
+                    Log.d(TAG, "Loaded ${songs.size} international hits for home")
+                } else {
+                    setSectionError(HomeSections.INTERNATIONAL, "Couldn't load international hits")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading international hits for home", e)
+                setSectionError(HomeSections.INTERNATIONAL, "Couldn't load international hits")
+            }
+        }
+    }
+
     private fun loadSecondarySections() {
         // ST Banjara/Lambadi - YouTube-only (Channel-filtered)
         viewModelScope.launch {
@@ -1249,39 +1316,43 @@ class HomeViewModel @Inject constructor(
             try {
                 repository.getPunjabiSongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(punjabiSongs = songs)
+                    setSectionLoaded(HomeSections.PUNJABI, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Punjabi songs", e)
             }
         }
-        
+
         // English
         viewModelScope.launch {
             try {
                 repository.getEnglishSongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(englishSongs = songs)
+                    setSectionLoaded(HomeSections.ENGLISH, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading English songs", e)
             }
         }
     }
-    
+
     private fun loadMoodSections() {
         viewModelScope.launch {
             try {
                 repository.getRomanticSongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(romanticSongs = songs)
+                    setSectionLoaded(HomeSections.ROMANTIC, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Romantic songs", e)
             }
         }
-        
+
         viewModelScope.launch {
             try {
                 repository.getPartySongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(partySongs = songs)
+                    setSectionLoaded(HomeSections.PARTY, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Party songs", e)
@@ -1423,16 +1494,18 @@ class HomeViewModel @Inject constructor(
             try {
                 repository.getArijitSinghSongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(arijitSinghSongs = songs)
+                    setSectionLoaded(HomeSections.ARIJIT, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading Arijit Singh songs", e)
             }
         }
-        
+
         viewModelScope.launch {
             try {
                 repository.getARRahmanSongs().getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(arRahmanSongs = songs)
+                    setSectionLoaded(HomeSections.ARRAHMAN, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading AR Rahman songs", e)
@@ -2094,6 +2167,7 @@ class HomeViewModel @Inject constructor(
                 songDao.getLikedSongs().collect { likedSongs ->
                     val favoriteSongs = likedSongs.map { it.toSong() }
                     _uiState.value = _uiState.value.copy(allTimeFavorites = favoriteSongs)
+                    setSectionLoaded(HomeSections.ALL_TIME_FAVORITES, favoriteSongs.size)
                     Log.d(TAG, "Loaded ${favoriteSongs.size} all time favorites")
                 }
             } catch (e: Exception) {
@@ -2118,6 +2192,7 @@ class HomeViewModel @Inject constructor(
             try {
                 repository.searchSongsWithLimit("trending songs 2024 viral", 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(trendingNowSongs = songs)
+                    setSectionLoaded(HomeSections.TRENDING_NOW, songs.size)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading trending now songs", e)

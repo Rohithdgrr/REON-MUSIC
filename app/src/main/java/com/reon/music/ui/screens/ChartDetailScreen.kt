@@ -120,6 +120,7 @@ fun ChartDetailScreen(
             "recent", "recently-played" -> uiState.recentlyPlayedSongs
             "quick-picks" -> uiState.quickPicksSongs
             "recommended" -> uiState.quickPicksSongs
+            "mostplayed" -> uiState.mostPlayedSongs
             "new" -> uiState.newReleases
             "alltimefavorite" -> uiState.allTimeFavorites
             "mostlistening" -> uiState.mostListeningSongs
