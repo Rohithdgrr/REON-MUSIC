@@ -123,7 +123,6 @@ class HomePaginationTest {
  * JVM unit tests for Jump Back In progress derivation.
  */
 class JumpBackInTest {
-
     @Test
     fun `completed play reports full progress`() {
         assertEquals(1f, jumpBackInProgress(10_000L, true, 200_000L))
@@ -139,5 +138,32 @@ class JumpBackInTest {
     @Test
     fun `missing durations report zero`() {
         assertEquals(0f, jumpBackInProgress(50_000L, false, 0L))
+    }
+}
+
+/**
+ * JVM unit tests for freshness helpers: discovery queries must qualify
+ * with the current year so "latest / trending" never goes stale.
+ */
+class HomeFreshnessTest {
+
+    @Test
+    fun `music year tracks the calendar`() {
+        val expected = java.util.Calendar.getInstance()
+            .get(java.util.Calendar.YEAR)
+        assertEquals(expected, com.reon.music.core.common.currentMusicYear())
+    }
+
+    @Test
+    fun `year query appends the current year`() {
+        val year = com.reon.music.core.common.currentMusicYear()
+        assertEquals(
+            "trending songs $year",
+            com.reon.music.core.common.yearQuery("trending songs")
+        )
+        assertEquals(
+            "latest songs $year",
+            com.reon.music.core.common.yearQuery("latest songs")
+        )
     }
 }

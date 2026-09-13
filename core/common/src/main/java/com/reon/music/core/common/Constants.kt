@@ -52,3 +52,18 @@ object CacheConstants {
     const val IMAGE_CACHE_SIZE = 100L * 1024 * 1024   // 100 MB
     const val URL_CACHE_EXPIRY_HOURS = 6L
 }
+
+/**
+ * Current calendar year (device local time). Discovery queries qualify
+ * with this instead of a hardcoded year so "latest / trending" searches
+ * keep returning current music as years roll over.
+ */
+fun currentMusicYear(): Int =
+    java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+
+/**
+ * Qualifies a discovery query with the current year, e.g.
+ * `yearQuery("trending songs")` -> `"trending songs 2026"`.
+ * Pure function so it is unit-testable on the JVM.
+ */
+fun yearQuery(base: String): String = "$base ${currentMusicYear()}"

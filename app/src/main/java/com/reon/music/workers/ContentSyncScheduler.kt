@@ -34,16 +34,16 @@ object ContentSyncScheduler {
         syncPlaylists: Boolean = true,
         syncNewReleases: Boolean = true
     ) {
-        // Build constraints — battery-aware, no idle required for periodic
+        // Build constraints — network only. Battery/storage gating is
+        // evaluated inside the worker so sync still runs (possibly
+        // deferred) instead of never firing on constrained devices.
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(
                 if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
             )
-            .setRequiresBatteryNotLow(true)
-            .setRequiresStorageNotLow(true)
             .build()
 
-        // Build input data
+        // Build input data (periodic sync)
         val inputData = Data.Builder()
             .putBoolean(ContentSyncWorker.KEY_SYNC_CHARTS, syncCharts)
             .putBoolean(ContentSyncWorker.KEY_SYNC_PLAYLISTS, syncPlaylists)
@@ -85,12 +85,11 @@ object ContentSyncScheduler {
         context: Context,
         wifiOnly: Boolean = false
     ): androidx.lifecycle.LiveData<WorkInfo> {
-        // Build constraints — immediate sync, battery-aware
+        // Build constraints — network only (immediate sync must fire).
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(
                 if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
             )
-            .setRequiresBatteryNotLow(true)
             .build()
 
         // Build input data

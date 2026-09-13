@@ -13,6 +13,7 @@ import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
 import com.reon.music.core.model.Song
+import com.reon.music.core.common.yearQuery
 import com.reon.music.core.preferences.MusicSource
 import com.reon.music.core.preferences.UserPreferences
 import com.reon.music.data.database.dao.HistoryDao
@@ -1003,7 +1004,7 @@ class HomeViewModel @Inject constructor(
         // Telugu Songs (YouTube-only)
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("telugu music 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("telugu music"), 20).getOrNull()?.let { songs ->
                     val youtubeOnly = songs.filter { it.source.equals("youtube", ignoreCase = true) }
                     _uiState.value = _uiState.value.copy(teluguSongsYoutube = youtubeOnly)
                     Log.d(TAG, "Loaded ${youtubeOnly.size} Telugu songs (YouTube-only)")
@@ -1046,7 +1047,7 @@ class HomeViewModel @Inject constructor(
         // Indian Songs (YouTube-only)
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("indian songs 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("indian songs"), 20).getOrNull()?.let { songs ->
                     val youtubeOnly = songs.filter { it.source.equals("youtube", ignoreCase = true) }
                     _uiState.value = _uiState.value.copy(indianSongsYoutube = youtubeOnly)
                     Log.d(TAG, "Loaded ${youtubeOnly.size} Indian songs (YouTube-only)")
@@ -1079,7 +1080,7 @@ class HomeViewModel @Inject constructor(
         // New Albums
         viewModelScope.launch {
             try {
-                repository.searchAlbums("new 2024").getOrNull()?.let { albums ->
+                repository.searchAlbums(yearQuery("new")).getOrNull()?.let { albums ->
                     _uiState.value = _uiState.value.copy(newAlbums = albums)
                 }
             } catch (e: Exception) {
@@ -1106,7 +1107,7 @@ class HomeViewModel @Inject constructor(
         // Top 50 English
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("top english songs 2024", 50).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("top english songs"), 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50English = songs)
                     updateCharts()
                     setSectionError("charts", null)
@@ -1120,7 +1121,7 @@ class HomeViewModel @Inject constructor(
         // Top 50 Telugu
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("top telugu songs 2024", 50).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("top telugu songs"), 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Telugu = songs)
                     updateCharts()
                     setSectionError("charts", null)
@@ -1134,7 +1135,7 @@ class HomeViewModel @Inject constructor(
         // Top 50 Tamil
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("top tamil songs 2024", 50).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("top tamil songs"), 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Tamil = songs)
                     updateCharts()
                     setSectionError("charts", null)
@@ -1148,7 +1149,7 @@ class HomeViewModel @Inject constructor(
         // Top 50 Punjabi
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("top punjabi songs 2024", 50).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("top punjabi songs"), 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(top50Punjabi = songs)
                     updateCharts()
                     setSectionError("charts", null)
@@ -1951,7 +1952,7 @@ class HomeViewModel @Inject constructor(
         // Most Listening Telugu Songs
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("most popular telugu songs 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("most popular telugu songs"), 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(mostListeningTeluguSongs = songs)
                 }
             } catch (e: Exception) {
@@ -1962,7 +1963,7 @@ class HomeViewModel @Inject constructor(
         // Most Listening Hindi Songs
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("most popular hindi songs 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("most popular hindi songs"), 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(mostListeningHindiSongs = songs)
                 }
             } catch (e: Exception) {
@@ -2006,7 +2007,7 @@ class HomeViewModel @Inject constructor(
         // Most Listening Indian Songs
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("most streamed indian songs 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("most streamed indian songs"), 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(mostListeningIndianSongs = songs)
                 }
             } catch (e: Exception) {
@@ -2104,7 +2105,7 @@ class HomeViewModel @Inject constructor(
         // Global Top 50
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("global top 50 songs 2024", 50).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("global top 50 songs"), 50).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(globalTop50 = songs)
                 }
             } catch (e: Exception) {
@@ -2126,7 +2127,7 @@ class HomeViewModel @Inject constructor(
         // English Pop Songs
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("english pop songs 2024", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("english pop songs"), 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(englishPopSongs = songs)
                 }
             } catch (e: Exception) {
@@ -2190,7 +2191,7 @@ class HomeViewModel @Inject constructor(
         // Trending Now
         viewModelScope.launch {
             try {
-                repository.searchSongsWithLimit("trending songs 2024 viral", 20).getOrNull()?.let { songs ->
+                repository.searchSongsWithLimit(yearQuery("trending songs viral"), 20).getOrNull()?.let { songs ->
                     _uiState.value = _uiState.value.copy(trendingNowSongs = songs)
                     setSectionLoaded(HomeSections.TRENDING_NOW, songs.size)
                 }

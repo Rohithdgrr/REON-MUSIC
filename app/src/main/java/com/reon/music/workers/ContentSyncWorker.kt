@@ -47,6 +47,7 @@ class ContentSyncWorker(
     @InstallIn(SingletonComponent::class)
     interface ContentSyncWorkerEntryPoint {
         fun musicRepository(): MusicRepository
+        fun userPreferences(): com.reon.music.core.preferences.UserPreferences
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -62,6 +63,7 @@ class ContentSyncWorker(
                 ContentSyncWorkerEntryPoint::class.java
             )
             val repository = entryPoint.musicRepository()
+            val userPreferences = entryPoint.userPreferences()
             
             // Get sync preferences from input data
             val syncCharts = inputData.getBoolean(KEY_SYNC_CHARTS, true)
@@ -101,6 +103,10 @@ class ContentSyncWorker(
                 newReleasesUpdated
             )
             
+            // Record the sync so the UI can show freshness and skip
+            // redundant reloads when content was just synced in background.
+            userPreferences.setLastSyncTime(System.currentTimeMillis())
+
             // Create output data
             val outputData = androidx.work.Data.Builder()
                 .putInt(KEY_CHARTS_UPDATED, chartsUpdated)
@@ -130,39 +136,29 @@ class ContentSyncWorker(
     }
 
     /**
-     * Sync charts from YouTube Music
+     * Sync charts from YouTube Music (InnerTube). Each fetch warms the
+     * HTTP caches and proves the endpoint is still returning fresh data.
      */
     private suspend fun syncCharts(repository: MusicRepository): Int {
         return try {
             var updated = 0
-            
-            // Sync different chart types
-            val chartTypes = listOf(
-                "top_songs",
-                "trending_songs",
-                "top_hindi",
-                "top_telugu",
-                "top_english",
-                "top_tamil",
-                "top_punjabi"
-            )
-            
-            chartTypes.forEach { chartType ->
+
+            suspend fun fetch(label: String, block: suspend () -> com.reon.music.core.common.Result<List<*>>) {
                 try {
-                    // Fetch chart from API
-                    // Note: Actual implementation depends on your repository methods
-                    // This is a placeholder showing the pattern
-                    Log.d(TAG, "Fetching chart: $chartType")
-                    
-                    // Example: repository.getChart(chartType)
-                    // Then save to local database
-                    
-                    updated++
+                    Log.d(TAG, "Fetching chart: $label")
+                    if (block().isSuccess) updated++
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to sync chart: $chartType", e)
+                    Log.e(TAG, "Failed to sync chart: $label", e)
                 }
             }
-            
+
+            fetch("trending") { repository.getTrendingSongs() }
+            fetch("top_hindi") { repository.getTop50Hindi() }
+            fetch("top_telugu") { repository.getTeluguSongs() }
+            fetch("top_tamil") { repository.getTamilSongs() }
+            fetch("top_english") { repository.getEnglishSongs() }
+            fetch("top_punjabi") { repository.getPunjabiSongs() }
+
             updated
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync charts", e)
@@ -171,39 +167,33 @@ class ContentSyncWorker(
     }
 
     /**
-     * Sync playlists from YouTube Music
+     * Sync playlists from YouTube Music (InnerTube).
      */
     private suspend fun syncPlaylists(repository: MusicRepository): Int {
         return try {
             var updated = 0
-            
-            // Sync featured playlists
+
             try {
                 Log.d(TAG, "Fetching featured playlists")
-                // Example: repository.getFeaturedPlaylists()
-                updated++
+                if (repository.getFeaturedPlaylists().isSuccess) updated++
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to sync featured playlists", e)
             }
-            
-            // Sync mood playlists
+
             try {
                 Log.d(TAG, "Fetching mood playlists")
-                // Example: repository.getMoodPlaylists()
-                updated++
+                if (repository.searchPlaylists("mood chill relax").isSuccess) updated++
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to sync mood playlists", e)
             }
-            
-            // Sync genre playlists
+
             try {
                 Log.d(TAG, "Fetching genre playlists")
-                // Example: repository.getGenrePlaylists()
-                updated++
+                if (repository.searchPlaylists("pop hits playlist").isSuccess) updated++
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to sync genre playlists", e)
             }
-            
+
             updated
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync playlists", e)
@@ -212,28 +202,24 @@ class ContentSyncWorker(
     }
 
     /**
-     * Sync new releases from YouTube Music
+     * Sync new releases from YouTube Music (InnerTube).
      */
     private suspend fun syncNewReleases(repository: MusicRepository): Int {
         return try {
             var updated = 0
-            
-            // Sync new releases
+
             try {
                 Log.d(TAG, "Fetching new releases")
-                // Example: repository.getNewReleases()
-                updated++
+                if (repository.getNewReleases().isSuccess) updated++
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to sync new releases", e)
             }
-            
-            // Sync new albums
+
             try {
-                Log.d(TAG, "Fetching new albums")
-                // Example: repository.getNewAlbums()
-                updated++
+                Log.d(TAG, "Fetching trending albums")
+                if (repository.getTrendingAlbums().isSuccess) updated++
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to sync new albums", e)
+                Log.e(TAG, "Failed to sync trending albums", e)
             }
             
             updated

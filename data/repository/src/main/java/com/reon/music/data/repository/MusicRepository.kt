@@ -7,6 +7,7 @@
 package com.reon.music.data.repository
 
 import com.reon.music.core.common.Result
+import com.reon.music.core.common.yearQuery
 import com.reon.music.core.model.Album
 import com.reon.music.core.model.Artist
 import com.reon.music.core.model.Playlist
@@ -213,12 +214,12 @@ class MusicRepository @Inject constructor(
     /**
      * Get trending songs (from JioSaavn)
      */
-    suspend fun getTrendingSongs(): Result<List<Song>> = youtubeSongs("trending songs 2024", 20)
-    
+    suspend fun getTrendingSongs(): Result<List<Song>> = youtubeSongs(yearQuery("trending songs"), 20)
+
     /**
      * Get new releases
      */
-    suspend fun getNewReleases(): Result<List<Song>> = youtubeSongs("latest songs 2024", 20)
+    suspend fun getNewReleases(): Result<List<Song>> = youtubeSongs(yearQuery("latest songs"), 20)
     
     /**
      * Get Top 50 Hindi songs
@@ -233,7 +234,7 @@ class MusicRepository @Inject constructor(
     /**
      * Get Telugu songs
      */
-    suspend fun getTeluguSongs(): Result<List<Song>> = youtubeSongs("telugu songs 2024", 20)
+    suspend fun getTeluguSongs(): Result<List<Song>> = youtubeSongs(yearQuery("telugu songs"), 20)
     
     /**
      * Get Telugu Top songs
@@ -243,17 +244,17 @@ class MusicRepository @Inject constructor(
     /**
      * Get Tamil songs
      */
-    suspend fun getTamilSongs(): Result<List<Song>> = youtubeSongs("tamil songs 2024", 20)
+    suspend fun getTamilSongs(): Result<List<Song>> = youtubeSongs(yearQuery("tamil songs"), 20)
     
     /**
      * Get Punjabi songs
      */
-    suspend fun getPunjabiSongs(): Result<List<Song>> = youtubeSongs("punjabi songs 2024", 20)
+    suspend fun getPunjabiSongs(): Result<List<Song>> = youtubeSongs(yearQuery("punjabi songs"), 20)
     
     /**
      * Get English Top songs
      */
-    suspend fun getEnglishSongs(): Result<List<Song>> = youtubeSongs("english pop songs 2024", 20)
+    suspend fun getEnglishSongs(): Result<List<Song>> = youtubeSongs(yearQuery("english pop songs"), 20)
     
     /**
      * Get Romantic songs
@@ -313,7 +314,7 @@ class MusicRepository @Inject constructor(
     /**
      * Get songs by language
      */
-    suspend fun getSongsByLanguage(language: String): Result<List<Song>> = youtubeSongs("$language songs 2024", 30)
+    suspend fun getSongsByLanguage(language: String): Result<List<Song>> = youtubeSongs(yearQuery("$language songs"), 30)
     
     /**
      * Get songs by genre
