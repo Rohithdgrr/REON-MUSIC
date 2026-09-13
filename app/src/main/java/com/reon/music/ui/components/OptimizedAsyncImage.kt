@@ -36,8 +36,8 @@ import coil.request.ImageRequest
  * Lower quality = faster load, less data, less memory
  */
 enum class ImageQuality {
-    THUMBNAIL,  // 120x120 - for list items
-    MEDIUM,     // 300x300 - for cards
+    THUMBNAIL,  // 160x160 - for list items
+    MEDIUM,     // 400x400 - for cards
     HIGH        // 544x544 - for now playing screen
 }
 
@@ -203,8 +203,8 @@ private fun getOptimizedUrl(url: String?, quality: ImageQuality): String? {
  */
 private fun getTargetSize(quality: ImageQuality): coil.size.Size {
     return when (quality) {
-        ImageQuality.THUMBNAIL -> coil.size.Size(120, 120)
-        ImageQuality.MEDIUM -> coil.size.Size(300, 300)
+        ImageQuality.THUMBNAIL -> coil.size.Size(160, 160)
+        ImageQuality.MEDIUM -> coil.size.Size(400, 400)
         ImageQuality.HIGH -> coil.size.Size(544, 544)
     }
 }

@@ -48,6 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.palette.graphics.Palette
 import coil.imageLoader
@@ -161,37 +163,6 @@ private fun rememberArtworkTint(imageUrl: String?): Color? {
     return tint
 }
 
-@Composable
-private fun LastListenedGrid(
-    songs: List<Song>,
-    progressById: Map<String, Float> = emptyMap(),
-    onSongClick: (Song) -> Unit
-) {
-    val rows = ((songs.size + 3) / 4).coerceAtMost(4)
-    val itemHeight = 64.dp
-    val verticalSpacing = 10.dp
-    val gridHeight = (itemHeight * rows.toFloat()) + (verticalSpacing * (rows - 1).coerceAtLeast(0).toFloat())
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(4),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(gridHeight)
-            .padding(horizontal = 16.dp),
-        userScrollEnabled = false,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(verticalSpacing)
-    ) {
-        items(songs, key = { it.id }, contentType = { "song" }) { song ->
-            LastListenedGridItem(
-                song = song,
-                progress = progressById[song.id],
-                onClick = { onSongClick(song) }
-            )
-        }
-    }
-}
-
 /**
  * Listening-progress ring shown on artwork corners for "Jump Back In".
  * Progress comes from stored play duration vs. track duration.
@@ -218,6 +189,29 @@ private fun ProgressRingBadge(
     }
 }
 
+/**
+ * Small orange play button overlaid on artwork corners.
+ */
+@Composable
+private fun PlayBadge(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(AccentOrange),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
 @Composable
 private fun ShowMoreButton(
     onClick: () -> Unit,
@@ -226,7 +220,7 @@ private fun ShowMoreButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         TextButton(onClick = onClick) {
@@ -248,8 +242,8 @@ private fun JumpBackInRow(
     sharedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(items, key = { it.song.id }, contentType = { "song" }) { item ->
             JumpBackInCard(
@@ -282,7 +276,7 @@ private fun JumpBackInCard(
     }
     Card(
         modifier = Modifier
-            .width(140.dp)
+            .width(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -292,7 +286,7 @@ private fun JumpBackInCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(170.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(AccentOrange, AccentOrangeDeep)
@@ -338,74 +332,12 @@ private fun JumpBackInCard(
 }
 
 @Composable
-private fun LastListenedGridItem(
-    song: Song,
-    progress: Float? = null,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .pressScaleClickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(64.dp)
-                    .fillMaxHeight()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(AccentOrange, AccentOrangeDeep)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                OptimizedAsyncImage(
-                    imageUrl = song.artworkUrl,
-                    contentDescription = "Artwork for ${song.title}",
-                    quality = ImageQuality.THUMBNAIL,
-                    shape = RectangleShape,
-                    modifier = Modifier.fillMaxSize()
-                )
-                if (progress != null && progress > 0f) {
-                    ProgressRingBadge(
-                        progress = progress,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                    )
-                }
-            }
-
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = rememberHomeColors().textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp)
-            )
-        }
-    }
-}
-
-@Composable
 private fun GenresRow(
     genres: List<Genre>,
     onGenreClick: (Genre) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(genres, key = { it.id }, contentType = { "genre" }) { genre ->
@@ -492,7 +424,7 @@ fun HomeScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // User Avatar
                         Box(
@@ -646,8 +578,8 @@ fun HomeScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 100.dp),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                        contentPadding = PaddingValues(bottom = 96.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         val sectionErrorMessage = if (uiState.sectionErrors.isNotEmpty()) {
                             "Couldn't load: ${uiState.sectionErrors.keys.joinToString(", ")}"
@@ -668,16 +600,18 @@ fun HomeScreen(
                                 )
                             }
                         }
-            // Last Listened (grid, paged window from the ViewModel)
+            // Recently Played (horizontal cards with play badges)
             if (uiState.recentlyPlayedSongs.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Last Listened",
-                        onSeeAllClick = { onSeeAllClick("recently-played") }
+                        title = "Recently Played",
+                        showSeeAll = false,
+                        actionIcon = Icons.Outlined.History,
+                        onActionClick = { onSeeAllClick("recently-played") }
                     )
                 }
                 item {
-                    LastListenedGrid(
+                    RecentlyPlayedRow(
                         songs = homeViewModel.homeRowSongs(
                             com.reon.music.ui.viewmodels.HomeSections.RECENT,
                             uiState.recentlyPlayedSongs
@@ -765,14 +699,25 @@ fun HomeScreen(
                 item {
                     SectionHeader(
                         title = "Made For You",
-                        onSeeAllClick = { onSeeAllClick("daily-mix") }
+                        showSeeAll = false,
+                        trailingLabel = "Personalized",
+                        onTrailingLabelClick = { onSeeAllClick("daily-mix") }
                     )
                 }
                 item {
-                    MixesRow(
-                        mixes = uiState.dailyMixes,
-                        onMixClick = onMixClick
+                    DailyMixHero(
+                        mix = uiState.dailyMixes.first(),
+                        mixNumber = 1,
+                        onPlayClick = { onMixClick(uiState.dailyMixes.first()) }
                     )
+                }
+                if (uiState.dailyMixes.size > 1) {
+                    item {
+                        MixesRow(
+                            mixes = uiState.dailyMixes.drop(1),
+                            onMixClick = onMixClick
+                        )
+                    }
                 }
             }
 
@@ -885,7 +830,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        showNewBadge = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1003,18 +950,29 @@ fun HomeScreen(
             if (uiState.genres.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Genres",
+                        title = "Browse Genres",
                         onSeeAllClick = { onSeeAllClick("genres") }
                     )
                 }
                 item {
                     GenresRow(
-                        genres = homeViewModel.homeRowItems(
+                        genres = listOf(
+                            Genre(
+                                id = "all-trending",
+                                name = "All / Trending",
+                                iconName = "trending_up",
+                                accentColor = 0xFFFF6B35.toInt()
+                            )
+                        ) + homeViewModel.homeRowItems(
                             com.reon.music.ui.viewmodels.HomeSections.GENRES,
                             uiState.genres
                         ),
                         onGenreClick = { genre ->
-                            onChartClick("genre-${genre.id}", genre.name)
+                            if (genre.id == "all-trending") {
+                                onSeeAllClick("trending")
+                            } else {
+                                onChartClick("genre-${genre.id}", genre.name)
+                            }
                         }
                     )
                 }
@@ -1024,7 +982,7 @@ fun HomeScreen(
             if (uiState.teluguSongs.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Telugu Hits",
+                        title = "Telugu Hits ⚡",
                         onSeeAllClick = { onSeeAllClick("telugu") }
                     )
                 }
@@ -1036,7 +994,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1073,7 +1033,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1098,7 +1060,7 @@ fun HomeScreen(
             if (uiState.tamilSongs.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Tamil Hits",
+                        title = "Tamil Hits ⚡",
                         onSeeAllClick = { onSeeAllClick("tamil") }
                     )
                 }
@@ -1110,7 +1072,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1147,7 +1111,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1184,7 +1150,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1221,7 +1189,9 @@ fun HomeScreen(
                         ),
                         onSongClick = onSongClick,
                         sharedTransitionScope = sharedTransitionScope,
-                        sharedVisibilityScope = sharedVisibilityScope
+                        sharedVisibilityScope = sharedVisibilityScope,
+                        showPlayBadge = false,
+                        posterAspect = true
                     )
                 }
                 if (homeViewModel.canLoadMore(
@@ -1481,8 +1451,8 @@ private fun QuickActionsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         QuickActionCard(
             icon = Icons.Outlined.LibraryMusic,
@@ -1570,7 +1540,11 @@ private fun QuickActionCard(
 private fun SectionHeader(
     title: String,
     onSeeAllClick: () -> Unit = {},
-    showSeeAll: Boolean = true
+    showSeeAll: Boolean = true,
+    trailingLabel: String? = null,
+    onTrailingLabelClick: (() -> Unit)? = null,
+    actionIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onActionClick: (() -> Unit)? = null
 ) {
     AnimatedVisibility(
         visible = true,
@@ -1582,7 +1556,7 @@ private fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -1594,13 +1568,47 @@ private fun SectionHeader(
         )
 
         if (showSeeAll) {
-        TextButton(onClick = onSeeAllClick) {
+        TextButton(
+            onClick = onSeeAllClick,
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+        ) {
             Text(
                 text = "See all",
                 style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = AccentOrange
             )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = AccentOrange,
+                modifier = Modifier.size(16.dp)
+            )
         }
+        } else if (trailingLabel != null) {
+            TextButton(
+                onClick = { onTrailingLabelClick?.invoke() },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = trailingLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AccentOrange
+                )
+            }
+        } else if (actionIcon != null) {
+            IconButton(
+                onClick = { onActionClick?.invoke() },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = title,
+                    tint = rememberHomeColors().textSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
     }
@@ -1677,7 +1685,7 @@ private fun HomeErrorBanner(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = AccentOrangeSoft)
     ) {
@@ -1712,15 +1720,17 @@ private fun HomeErrorBanner(
 @Composable
 private fun RecentlyPlayedRow(
     songs: List<Song>,
+    progressById: Map<String, Float> = emptyMap(),
     onSongClick: (Song) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(songs, key = { it.id }, contentType = { "song" }) { song ->
             RecentlyPlayedCard(
                 song = song,
+                progress = progressById[song.id],
                 onClick = { onSongClick(song) }
             )
         }
@@ -1730,11 +1740,12 @@ private fun RecentlyPlayedRow(
 @Composable
 private fun RecentlyPlayedCard(
     song: Song,
+    progress: Float? = null,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
-            .width(160.dp)
+            .width(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -1745,7 +1756,7 @@ private fun RecentlyPlayedCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(170.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(AccentOrange, AccentOrangeDeep)
@@ -1759,6 +1770,19 @@ private fun RecentlyPlayedCard(
                     quality = ImageQuality.MEDIUM,
                     shape = RectangleShape,
                     modifier = Modifier.fillMaxSize()
+                )
+                if (progress != null && progress > 0f && progress < 1f) {
+                    ProgressRingBadge(
+                        progress = progress,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    )
+                }
+                PlayBadge(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
                 )
             }
 
@@ -1792,7 +1816,7 @@ private fun QuickPicksGrid(
     onSongClick: (Song) -> Unit
 ) {
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         songs.chunked(2).forEach { rowSongs ->
@@ -1880,13 +1904,155 @@ private fun QuickPickCard(
 }
 
 @Composable
+private fun DailyMixHero(
+    mix: DailyMix,
+    mixNumber: Int,
+    onPlayClick: () -> Unit
+) {
+    val artworks = remember(mix) {
+        mix.songs.mapNotNull { it.artworkUrl }.distinct().take(3)
+    }
+    val artistsLine = remember(mix) {
+        mix.songs.map { it.artist }.distinct().take(3).joinToString(", ")
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .height(172.dp)
+            .pressScaleClickable(onClick = onPlayClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = AccentOrange),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(AccentOrange, AccentOrangeDeep)
+                    )
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "CUSTOM MIX",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Daily Mix $mixNumber",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (artistsLine.isNotBlank()) {
+                        Text(
+                            text = "$artistsLine, and more",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.9f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // Play Mix pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White)
+                            .clickable(onClick = onPlayClick)
+                            .padding(horizontal = 18.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = AccentOrangeDeep,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Play Mix",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentOrangeDeep
+                            )
+                        }
+                    }
+                }
+                // Stacked artwork covers
+                if (artworks.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .width(96.dp)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        artworks.forEachIndexed { index, url ->
+                            val offsetX = (index * -14).dp
+                            val rotation = when (index) {
+                                0 -> 8f
+                                1 -> -6f
+                                else -> 0f
+                            }
+                            Card(
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .offset(x = offsetX)
+                                    .graphicsLayer { rotationZ = rotation },
+                                shape = RoundedCornerShape(10.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                            ) {
+                                OptimizedAsyncImage(
+                                    imageUrl = url,
+                                    contentDescription = null,
+                                    quality = ImageQuality.THUMBNAIL,
+                                    shape = RectangleShape,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MixesRow(
     mixes: List<DailyMix>,
     onMixClick: (DailyMix) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(mixes, key = { it.id }, contentType = { "mix" }) { mix ->
             MixCard(
@@ -1904,7 +2070,7 @@ private fun MixCard(
 ) {
     Card(
         modifier = Modifier
-            .width(160.dp)
+            .width(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -1913,7 +2079,7 @@ private fun MixCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp)
+                .height(140.dp)
                 .background(
                     Brush.linearGradient(
                         colors = listOf(AccentOrange, AccentOrangeDeep)
@@ -1970,18 +2136,24 @@ private fun SongsRow(
     songs: List<Song>,
     onSongClick: (Song) -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
-    sharedVisibilityScope: AnimatedVisibilityScope? = null
+    sharedVisibilityScope: AnimatedVisibilityScope? = null,
+    showPlayBadge: Boolean = true,
+    showNewBadge: Boolean = false,
+    posterAspect: Boolean = false
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(songs, key = { it.id }, contentType = { "song" }) { song ->
             SongCard(
                 song = song,
                 onClick = { onSongClick(song) },
                 sharedTransitionScope = sharedTransitionScope,
-                sharedVisibilityScope = sharedVisibilityScope
+                sharedVisibilityScope = sharedVisibilityScope,
+                showPlayBadge = showPlayBadge,
+                showNewBadge = showNewBadge,
+                posterAspect = posterAspect
             )
         }
     }
@@ -1993,7 +2165,10 @@ private fun SongCard(
     song: Song,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
-    sharedVisibilityScope: AnimatedVisibilityScope? = null
+    sharedVisibilityScope: AnimatedVisibilityScope? = null,
+    showPlayBadge: Boolean = false,
+    showNewBadge: Boolean = false,
+    posterAspect: Boolean = false
 ) {
     val artworkSharedModifier = if (sharedTransitionScope != null && sharedVisibilityScope != null) {
         with(sharedTransitionScope) {
@@ -2007,7 +2182,7 @@ private fun SongCard(
     }
     Card(
         modifier = Modifier
-            .width(140.dp)
+            .width(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -2018,7 +2193,7 @@ private fun SongCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(if (posterAspect) 200.dp else 160.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(AccentOrange, AccentOrangeDeep)
@@ -2033,6 +2208,32 @@ private fun SongCard(
                     shape = RectangleShape,
                     modifier = Modifier.fillMaxSize().then(artworkSharedModifier)
                 )
+                if (showNewBadge) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AccentOrange)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "NEW",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 10.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+                if (showPlayBadge) {
+                    PlayBadge(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                }
             }
             
             // Song info
@@ -2065,7 +2266,7 @@ private fun ArtistsRow(
     onArtistClick: (Artist) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(artists, key = { it.id }, contentType = { "artist" }) { artist ->
@@ -2084,14 +2285,17 @@ private fun ArtistCard(
 ) {
     Column(
         modifier = Modifier
-            .width(100.dp)
+            .width(112.dp)
             .pressScaleClickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Artist avatar
+        // Artist avatar with accent ring
         Box(
             modifier = Modifier
-                .size(100.dp)
+                .size(112.dp)
+                .clip(CircleShape)
+                .background(AccentOrange)
+                .padding(2.5.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.verticalGradient(
@@ -2123,8 +2327,8 @@ private fun ArtistCard(
         Text(
             text = artist.name,
             style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = rememberHomeColors().textPrimary,
+            fontWeight = FontWeight.SemiBold,
+            color = AccentOrangeDeep,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -2137,8 +2341,8 @@ private fun AlbumsRow(
     onAlbumClick: (com.reon.music.core.model.Album) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(albums, key = { it.id }, contentType = { "album" }) { album ->
             AlbumCard(
@@ -2156,7 +2360,7 @@ private fun AlbumCard(
 ) {
     Card(
         modifier = Modifier
-            .width(140.dp)
+            .width(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -2166,7 +2370,7 @@ private fun AlbumCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(170.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(AccentOrange, AccentOrangeDeep)
@@ -2209,8 +2413,8 @@ private fun PlaylistsRow(
     onPlaylistClick: (Playlist) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(playlists, key = { it.id }, contentType = { "playlist" }) { playlist ->
             PlaylistCard(
@@ -2246,7 +2450,7 @@ private fun PlaylistCard(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -2290,8 +2494,8 @@ private fun ChartsRow(
     onChartClick: (String, String) -> Unit
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(charts, key = { it.id }, contentType = { "chart" }) { chart ->
             ChartCard(
@@ -2317,8 +2521,8 @@ private fun ChartCard(
     
     Card(
         modifier = Modifier
-            .width(160.dp)
-            .height(100.dp)
+            .width(170.dp)
+            .height(170.dp)
             .pressScaleClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = rememberHomeColors().surface),
@@ -2334,27 +2538,58 @@ private fun ChartCard(
                         end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
                     )
                 )
-                .padding(16.dp)
         ) {
-            Column {
+            // Cover art backdrop with bottom gradient overlay
+            val coverUrl = remember(chart) {
+                chart.songs.firstOrNull()?.artworkUrl
+            }
+            if (coverUrl != null) {
+                OptimizedAsyncImage(
+                    imageUrl = coverUrl,
+                    contentDescription = null,
+                    quality = ImageQuality.THUMBNAIL,
+                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.85f)
+                            )
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp)
+            ) {
                 Text(
                     text = chart.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${chart.songs.size} tracks",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = Color.White.copy(alpha = 0.75f)
                 )
             }
-            
+
             // Play button
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .padding(10.dp)
                     .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.3f)),
