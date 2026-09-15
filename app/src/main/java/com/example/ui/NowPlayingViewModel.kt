@@ -1,8 +1,12 @@
 package com.example.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ReonApplication
 import com.example.data.MusicTrack
+import com.example.data.ReonDatabase
+import com.example.data.TrackEntity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,9 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class NowPlayingViewModel : ViewModel() {
+class NowPlayingViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val allTracks = MusicTrack.sampleTracks
+    private val db: ReonDatabase = (application as ReonApplication).database
+    private val dao = db.reonDao()
+
+    private var allTracks: List<MusicTrack> = MusicTrack.sampleTracks
     private var currentTrackIndex = 0
 
     private val _uiState = MutableStateFlow(createInitialState())
@@ -22,7 +29,60 @@ class NowPlayingViewModel : ViewModel() {
     private var playbackJob: Job? = null
 
     init {
+        loadTracksFromDb()
         startPlaybackTimer()
+    }
+
+    private fun loadTracksFromDb() {
+        viewModelScope.launch {
+            dao.getAllTracksFlow().collect { dbTracks ->
+                if (dbTracks.isNotEmpty()) {
+                    allTracks = dbTracks.map { it.toMusicTrack() }
+                    val currentTrackId = _uiState.value.currentTrack.id
+                    val matchedIndex = allTracks.indexOfFirst { it.id == currentTrackId }
+                    if (matchedIndex != -1) {
+                        currentTrackIndex = matchedIndex
+                    }
+                    updateTracksState()
+                }
+            }
+        }
+    }
+
+    private fun TrackEntity.toMusicTrack(): MusicTrack = MusicTrack(
+        id = id,
+        title = title,
+        artist = artist,
+        album = album,
+        category = category,
+        durationMs = durationMs,
+        albumArtUrl = albumArtUrl,
+        artistImageUrl = artistImageUrl,
+        source = source,
+        quality = quality,
+        spatialMode = spatialMode,
+        codec = codec,
+        sampleRate = sampleRate,
+        monthlyListeners = monthlyListeners,
+        lyricsQuote = lyricsQuote,
+        isLiked = isLiked
+    )
+
+    private fun updateTracksState() {
+        if (allTracks.isEmpty()) return
+        val current = allTracks.getOrNull(currentTrackIndex) ?: allTracks[0]
+        val next = allTracks.getOrNull((currentTrackIndex + 1) % allTracks.size) ?: allTracks[0]
+        val related = allTracks.filter { it.id != current.id }
+
+        _uiState.update { state ->
+            state.copy(
+                currentTrack = current,
+                nextTrack = next,
+                isLiked = current.isLiked,
+                relatedTracks = related,
+                queueTracks = allTracks
+            )
+        }
     }
 
     private fun createInitialState(): NowPlayingState {
@@ -150,12 +210,17 @@ class NowPlayingViewModel : ViewModel() {
     }
 
     fun toggleLike() {
-        _uiState.update {
-            val nextLiked = !it.isLiked
-            it.copy(
-                isLiked = nextLiked,
-                toastMessage = if (nextLiked) "Added to Favorites ❤️" else "Removed from Favorites"
-            )
+        viewModelScope.launch {
+            val trackId = _uiState.value.currentTrack.id
+            val isCurrentlyLiked = _uiState.value.isLiked
+            val targetLiked = !isCurrentlyLiked
+            dao.updateTrackLike(trackId, targetLiked)
+            _uiState.update {
+                it.copy(
+                    isLiked = targetLiked,
+                    toastMessage = if (targetLiked) "Added to Favorites ❤️" else "Removed from Favorites"
+                )
+            }
         }
     }
 
@@ -242,13 +307,18 @@ class NowPlayingViewModel : ViewModel() {
     }
 
     fun downloadTrack() {
-        _uiState.update {
-            val wasDownloaded = it.isDownloaded
-            it.copy(
-                isDownloaded = !wasDownloaded,
-                isMenuOpen = false,
-                toastMessage = if (!wasDownloaded) "Downloaded '${it.title}' in Lossless FLAC (96kHz)" else "Removed offline download"
-            )
+        viewModelScope.launch {
+            val trackId = _uiState.value.currentTrack.id
+            val isCurrentlyDownloaded = _uiState.value.isDownloaded
+            val targetDownloaded = !isCurrentlyDownloaded
+            dao.updateTrackDownload(trackId, targetDownloaded)
+            _uiState.update {
+                it.copy(
+                    isDownloaded = targetDownloaded,
+                    isMenuOpen = false,
+                    toastMessage = if (targetDownloaded) "Downloaded '${it.title}' in Lossless FLAC (96kHz)" else "Removed offline download"
+                )
+            }
         }
     }
 
@@ -293,6 +363,7 @@ class NowPlayingViewModel : ViewModel() {
     }
 
     private fun loadTrackAtIndex(index: Int) {
+        if (allTracks.isEmpty()) return
         val track = allTracks[index]
         val next = allTracks[(index + 1) % allTracks.size]
         val related = allTracks.filter { it.id != track.id }

@@ -93,7 +93,6 @@ fun AlbumScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC))
-            .statusBarsPadding()
             .testTag("reon_album_screen")
     ) {
         LazyColumn(

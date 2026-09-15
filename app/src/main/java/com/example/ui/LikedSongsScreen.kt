@@ -89,7 +89,6 @@ fun LikedSongsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC))
-            .statusBarsPadding()
             .testTag("reon_liked_songs_screen")
     ) {
         LazyColumn(

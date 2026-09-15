@@ -94,6 +94,21 @@ data class CategoryBrowseItem(
 )
 
 @Immutable
+data class ReonNotificationItem(
+    val id: String,
+    val title: String,
+    val message: String,
+    val timestamp: String,
+    val category: String = "RELEASE", // "RELEASE", "AUDIO ENGINE", "DOWNLOADS", "LIVE", "SYSTEM"
+    val isRead: Boolean = false,
+    val badge: String = "NEW",
+    val actionText: String = "Play Now",
+    val trackId: String? = null,
+    val albumId: String? = null,
+    val iconType: String = "music"
+)
+
+@Immutable
 data class TopMatchResult(
     val type: String, // "ARTIST", "SONG", "ALBUM"
     val id: String,
@@ -159,6 +174,10 @@ data class HomeState(
     // Analytics Dashboard View State
     val isAnalyticsOpen: Boolean = false,
 
+    // Notifications Screen View State
+    val isNotificationsOpen: Boolean = false,
+    val notifications: List<ReonNotificationItem> = emptyList(),
+
     // Search Specific State
     val recentSearches: List<String> = listOf("Aurora Glow", "Tokyo Underground", "Refractions", "Synthwave 84", "96kHz Lossless"),
     val trendingSearches: List<String> = listOf("ISOxo & Knock2", "Midnight Prism", "Deep Focus", "Cyber Soul", "Spatial Atmos", "Liquid DnB"),
@@ -189,6 +208,20 @@ data class HomeState(
     val downloadProgress: Float = 0f,
     val activeDownloadingTrackName: String = "",
     val showQualitySelector: Boolean = false,
+
+    // Customization & Appearance State
+    val themeMode: String = "LIGHT", // "SYSTEM", "LIGHT", "DARK", "OLED"
+    val accentColorIndex: Int = 0, // 0: Electric Blue, 1: Neon Cyan, 2: Cyber Purple, 3: Emerald Green, 4: Sunset Crimson, 5: Rose Magenta
+    val backgroundThemeIndex: Int = 0, // 0: Modern Ice Blue, 1: Pure White, 2: Soft Slate, 3: Obsidian Dark, 4: Pure AMOLED
+    val fontFamilyChoice: String = "SANS_SERIF", // "SANS_SERIF", "INTER", "MONOSPACE", "SERIF"
+    val fontSizeScale: Float = 1.0f, // 0.9f, 1.0f, 1.1f, 1.2f
+
+    // User Profile
+    val userProfileBio: String = "Audiophile & 192kHz Hi-Res Enthusiast",
+    val userProfileEmail: String = "rayan91greate@gmail.com",
+    val isEditProfileDialogOpen: Boolean = false,
+    val isAboutDialogOpen: Boolean = false,
+    val isOpenSourceLicensesDialogOpen: Boolean = false,
 
     // Section 4: Continue Listening Hero
     val currentTrack: TrackItem = TrackItem(

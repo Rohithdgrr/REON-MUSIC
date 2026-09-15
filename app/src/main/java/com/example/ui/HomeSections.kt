@@ -77,6 +77,7 @@ import com.example.R
 // ==========================================
 @Composable
 fun HomeTopBar(
+    unreadCount: Int = 0,
     onNotificationClick: () -> Unit = {},
     onAnalyticsClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
@@ -152,6 +153,17 @@ fun HomeTopBar(
                     tint = ReonTokens.TextPrimary,
                     modifier = Modifier.size(24.dp)
                 )
+                if (unreadCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 7.dp, end = 7.dp)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(ReonTokens.Primary)
+                            .border(1.5.dp, Color.White, CircleShape)
+                    )
+                }
             }
 
             Box(

@@ -120,7 +120,6 @@ fun SearchScreen(
         modifier = modifier
             .fillMaxSize()
             .background(ReonTokens.Canvas)
-            .statusBarsPadding()
             .testTag("reon_search_screen")
     ) {
         LazyColumn(

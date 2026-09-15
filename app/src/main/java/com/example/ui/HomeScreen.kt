@@ -18,7 +18,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -91,10 +99,31 @@ fun HomeScreen(
     onCloseSettings: () -> Unit = {},
     onOpenAnalytics: () -> Unit = {},
     onCloseAnalytics: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
+    onCloseNotifications: () -> Unit = {},
+    onMarkNotificationAsRead: (String) -> Unit = {},
+    onMarkAllNotificationsAsRead: () -> Unit = {},
+    onClearAllNotifications: () -> Unit = {},
+    onDeleteNotification: (String) -> Unit = {},
+    onUpdateProfile: (String, String) -> Unit = { _, _ -> },
+    onOpenEditProfile: () -> Unit = {},
+    onCloseEditProfile: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
+    onCloseAbout: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
+    onCloseLicenses: () -> Unit = {},
+    onSetThemeMode: (String) -> Unit = {},
+    onSetAccentColor: (Int) -> Unit = {},
+    onSetBackgroundTheme: (Int) -> Unit = {},
+    onSetFontFamily: (String) -> Unit = {},
+    onSetFontSizeScale: (Float) -> Unit = {},
+    onClearCache: () -> Unit = {},
+    onOptimizeThumbnails: () -> Unit = {},
     onShowToast: (String) -> Unit = {},
     onDismissToast: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val listState = rememberLazyListState()
 
     Box(
@@ -104,7 +133,19 @@ fun HomeScreen(
             .statusBarsPadding()
             .testTag("reon_home_screen")
     ) {
-        if (state.isAnalyticsOpen) {
+        if (state.isNotificationsOpen) {
+            NotificationScreen(
+                state = state,
+                onBackClick = onCloseNotifications,
+                onTrackSelect = onTrackSelect,
+                onOpenSettings = onOpenSettings,
+                onOpenDownloads = { onTabSelected(HomeTab.Downloads) },
+                onMarkAsRead = onMarkNotificationAsRead,
+                onMarkAllAsRead = onMarkAllNotificationsAsRead,
+                onClearAll = onClearAllNotifications,
+                onDeleteNotification = onDeleteNotification
+            )
+        } else if (state.isAnalyticsOpen) {
             AnalyticsScreen(
                 state = state,
                 onTrackSelect = onTrackSelect,
@@ -118,7 +159,24 @@ fun HomeScreen(
             SettingsScreen(
                 state = state,
                 onBackClick = onCloseSettings,
-                onShareClick = { onShowToast("Shared REON Audio Engine Configuration") },
+                onShareClick = {
+                    ShareHelper.shareApp(context)
+                    onShowToast("Shared REON Audio Engine Configuration")
+                },
+                onUpdateProfile = onUpdateProfile,
+                onOpenEditProfile = onOpenEditProfile,
+                onCloseEditProfile = onCloseEditProfile,
+                onOpenAbout = onOpenAbout,
+                onCloseAbout = onCloseAbout,
+                onOpenLicenses = onOpenLicenses,
+                onCloseLicenses = onCloseLicenses,
+                onSetThemeMode = onSetThemeMode,
+                onSetAccentColor = onSetAccentColor,
+                onSetBackgroundTheme = onSetBackgroundTheme,
+                onSetFontFamily = onSetFontFamily,
+                onSetFontSizeScale = onSetFontSizeScale,
+                onClearCache = onClearCache,
+                onOptimizeThumbnails = onOptimizeThumbnails,
                 onShowToast = onShowToast
             )
         } else if (state.isHistoryOpen) {
@@ -126,7 +184,10 @@ fun HomeScreen(
                 state = state,
                 onTrackSelect = onTrackSelect,
                 onBackClick = onCloseHistory,
-                onShareClick = { onShowToast("Shared Listening History Timeline") },
+                onShareClick = {
+                    ShareHelper.shareApp(context)
+                    onShowToast("Shared Listening History Timeline")
+                },
                 onClearHistoryClick = { onShowToast("Listening History Cleared") },
                 onToggleLike = { id -> onLike() },
                 onShowToast = onShowToast
@@ -136,7 +197,10 @@ fun HomeScreen(
                 state = state,
                 onTrackSelect = onTrackSelect,
                 onBackClick = onCloseLikedSongs,
-                onShareClick = { onShowToast("Shared Liked Masterpieces Library") },
+                onShareClick = {
+                    ShareHelper.sharePlaylist(context, "Liked Masterpieces")
+                    onShowToast("Shared Liked Masterpieces Library")
+                },
                 onPlayAllClick = { onShowToast("Playing Liked Songs") },
                 onToggleLike = { track -> onLike() },
                 onShowToast = onShowToast
@@ -147,7 +211,10 @@ fun HomeScreen(
                 onTrackSelect = onTrackSelect,
                 onAlbumSelect = onOpenAlbum,
                 onBackClick = onCloseArtist,
-                onShareClick = { onShowToast("Shared '${state.activeArtistName}' profile") },
+                onShareClick = {
+                    ShareHelper.shareArtist(context, state.activeArtistName)
+                    onShowToast("Shared '${state.activeArtistName}' profile")
+                },
                 onFollowToggle = onArtistFollowProfileToggle,
                 onRadioClick = { onShowToast("${state.activeArtistName} Radio Started") },
                 onPlayClick = { onShowToast("Playing ${state.activeArtistName}") },
@@ -159,7 +226,10 @@ fun HomeScreen(
                 state = state,
                 onTrackSelect = onTrackSelect,
                 onBackClick = onCloseAlbum,
-                onShareClick = { onShowToast("Shared '${state.activeAlbumTitle}' album") },
+                onShareClick = {
+                    ShareHelper.shareAlbum(context, state.activeAlbumTitle, state.activeArtistName)
+                    onShowToast("Shared '${state.activeAlbumTitle}' album")
+                },
                 onLikeToggle = onAlbumLikeToggle,
                 onDownloadToggle = onAlbumDownloadToggle,
                 onShuffleClick = onAlbumShuffle,
@@ -172,7 +242,10 @@ fun HomeScreen(
                 state = state,
                 onTrackSelect = onTrackSelect,
                 onBackClick = onClosePlaylist,
-                onShareClick = { onShowToast("Shared ${state.activePlaylistTitle} playlist") },
+                onShareClick = {
+                    ShareHelper.sharePlaylist(context, state.activePlaylistTitle)
+                    onShowToast("Shared ${state.activePlaylistTitle} playlist")
+                },
                 onLikeToggle = onPlaylistLikeToggle,
                 onDownloadToggle = onPlaylistDownloadToggle,
                 onShuffleClick = onPlaylistShuffle,
@@ -226,12 +299,13 @@ fun HomeScreen(
                     LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 10.dp, bottom = 180.dp)
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 180.dp)
                 ) {
                     // 1. Top Bar
                     item(key = "section_top_bar") {
                         HomeTopBar(
-                            onNotificationClick = { onShowToast("No new notifications") },
+                            unreadCount = state.notifications.count { !it.isRead },
+                            onNotificationClick = onOpenNotifications,
                             onAnalyticsClick = onOpenAnalytics,
                             onSettingsClick = onOpenSettings
                         )
@@ -280,8 +354,8 @@ fun HomeScreen(
                             onCardClick = onOpenNowPlaying,
                             onPlayPause = onPlayPause,
                             onLike = onLike,
-                            onSeeAll = { onShowToast("Opening Library Queue") },
-                            onMoreOptions = { onShowToast("Options for ${state.currentTrack.title}") }
+                            onSeeAll = { onOpenLikedSongs() },
+                            onMoreOptions = { }
                         )
                     }
 
@@ -381,7 +455,10 @@ fun HomeScreen(
                         HomeNewReleasesSection(
                             releases = state.newReleases,
                             onReleaseClick = onTrackSelect,
-                            onFreshDrops = { onShowToast("Opening Fresh Drops") }
+                            onFreshDrops = {
+                                onFilterSelect("All")
+                                onTabSelected(HomeTab.Search)
+                            }
                         )
                     }
 
@@ -465,7 +542,7 @@ fun HomeScreen(
                         HomeRecentlyPlayedSection(
                             tracks = state.recentlyPlayedList,
                             onTrackClick = onTrackSelect,
-                            onHistoryClick = { onShowToast("Viewing Full History") }
+                            onHistoryClick = onOpenHistory
                         )
                     }
 
@@ -489,8 +566,14 @@ fun HomeScreen(
                     item(key = "section_live_upcoming") {
                         HomeLiveUpcomingSection(
                             events = state.liveEvents,
-                            onEventClick = { event -> onShowToast("Concert: ${event.artist}") },
-                            onNearYou = { onShowToast("Viewing Concerts Near You") }
+                            onEventClick = { event ->
+                                onSearchChange(event.artist)
+                                onTabSelected(HomeTab.Search)
+                            },
+                            onNearYou = {
+                                onSearchChange("Live")
+                                onTabSelected(HomeTab.Search)
+                            }
                         )
                     }
 
@@ -502,13 +585,65 @@ fun HomeScreen(
         }
     }
 
-        // 19. Floating Mini Player (Sticky at the bottom, above the bottom nav)
-        if (state.isMiniPlayerVisible) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
+        // 19. Floating Mini Player & Upside Floating Toast notification
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Toast notification pill floating just upside of mini player
+            AnimatedVisibility(
+                visible = state.toastMessage != null,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 }
             ) {
+                state.toastMessage?.let { msg ->
+                    LaunchedEffect(msg) {
+                        kotlinx.coroutines.delay(2600)
+                        onDismissToast()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(bottom = 10.dp, start = 16.dp, end = 16.dp)
+                            .shadow(16.dp, RoundedCornerShape(16.dp), spotColor = Color(0xFF0057FF).copy(alpha = 0.25f))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF0B1020))
+                            .border(1.dp, Color(0xFF242C44), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(ReonTokens.Primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = msg,
+                                color = Color.White,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (state.isMiniPlayerVisible) {
                 MiniPlayerDock(
                     track = state.currentTrack,
                     isPlaying = state.currentTrack.isPlaying,
@@ -526,38 +661,6 @@ fun HomeScreen(
                     currentTab = state.currentTab,
                     onTabSelected = onTabSelected
                 )
-            }
-        }
-
-        // Toast notification pill
-        AnimatedVisibility(
-            visible = state.toastMessage != null,
-            enter = fadeIn() + slideInVertically { -40 },
-            exit = fadeOut() + slideOutVertically { -40 },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 56.dp)
-        ) {
-            state.toastMessage?.let { msg ->
-                LaunchedEffect(msg) {
-                    kotlinx.coroutines.delay(2400)
-                    onDismissToast()
-                }
-
-                Box(
-                    modifier = Modifier
-                        .shadow(12.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0B1020))
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = msg,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
         }
     }

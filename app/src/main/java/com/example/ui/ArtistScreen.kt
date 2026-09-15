@@ -87,7 +87,6 @@ fun ArtistScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC))
-            .statusBarsPadding()
             .testTag("reon_artist_screen")
     ) {
         LazyColumn(

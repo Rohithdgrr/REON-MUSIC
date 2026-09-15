@@ -100,7 +100,6 @@ fun DownloadsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF7F9FD)) // Soft canvas background from image
-            .statusBarsPadding()
             .testTag("reon_downloads_screen")
     ) {
         LazyColumn(

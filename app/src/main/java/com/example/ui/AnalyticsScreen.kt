@@ -90,9 +90,7 @@ fun AnalyticsScreen(
             .testTag("analytics_screen")
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+            modifier = Modifier.fillMaxSize()
         ) {
             // Header Bar
             Row(

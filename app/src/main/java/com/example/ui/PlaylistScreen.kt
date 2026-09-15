@@ -88,7 +88,6 @@ fun PlaylistScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF7F9FD)) // Smooth background canvas
-            .statusBarsPadding()
             .testTag("reon_playlist_screen")
     ) {
         LazyColumn(

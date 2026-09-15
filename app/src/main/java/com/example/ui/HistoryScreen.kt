@@ -98,7 +98,6 @@ fun HistoryScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFFF8FAFC))
-            .statusBarsPadding()
             .testTag("reon_history_screen")
     ) {
         LazyColumn(

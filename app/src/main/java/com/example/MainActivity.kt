@@ -19,11 +19,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.ui.HomeScreen
 import com.example.ui.HomeViewModel
 import com.example.ui.NowPlayingScreen
 import com.example.ui.NowPlayingViewModel
 import com.example.ui.ReonTokens
+import com.example.ui.ShareHelper
 import com.example.ui.theme.ReonTheme
 
 class MainActivity : ComponentActivity() {
@@ -31,16 +34,36 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      ReonTheme(darkTheme = false) {
+      val context = androidx.compose.ui.platform.LocalContext.current
+      val app = context.applicationContext as ReonApplication
+      val homeViewModel: HomeViewModel = viewModel(
+        factory = viewModelFactory {
+          initializer {
+            HomeViewModel(app)
+          }
+        }
+      )
+      val nowPlayingViewModel: NowPlayingViewModel = viewModel(
+        factory = viewModelFactory {
+          initializer {
+            NowPlayingViewModel(app)
+          }
+        }
+      )
+      val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
+      val nowPlayingState by nowPlayingViewModel.uiState.collectAsStateWithLifecycle()
+
+      ReonTheme(
+        themeMode = homeState.themeMode,
+        accentColorIndex = homeState.accentColorIndex,
+        backgroundThemeIndex = homeState.backgroundThemeIndex,
+        fontFamilyChoice = homeState.fontFamilyChoice,
+        fontScale = homeState.fontSizeScale
+      ) {
         Surface(
           modifier = Modifier.fillMaxSize(),
           color = ReonTokens.Canvas
         ) {
-          val homeViewModel: HomeViewModel = viewModel()
-          val nowPlayingViewModel: NowPlayingViewModel = viewModel()
-          val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
-          val nowPlayingState by nowPlayingViewModel.uiState.collectAsStateWithLifecycle()
-
           AnimatedContent(
             targetState = homeState.showNowPlayingScreen,
             transitionSpec = {
@@ -85,14 +108,26 @@ class MainActivity : ComponentActivity() {
                   homeViewModel.closeNowPlaying()
                   homeViewModel.openAlbum(null)
                 },
-                onShareTrack = { nowPlayingViewModel.shareTrack() },
+                onShareTrack = {
+                  ShareHelper.shareTrack(
+                    context = context,
+                    title = nowPlayingState.title,
+                    artist = nowPlayingState.artist,
+                    album = nowPlayingState.album
+                  )
+                  homeViewModel.showToast("Sharing \"${nowPlayingState.title}\"")
+                },
                 onSleepTimerClick = { nowPlayingViewModel.cycleSleepTimer() },
                 onTrackSelect = { track -> nowPlayingViewModel.selectTrack(track) },
                 onExpandPlayer = { /* Already expanded */ },
                 onDismissToast = { nowPlayingViewModel.dismissToast() }
               )
             } else {
-              if (homeState.isAnalyticsOpen) {
+              if (homeState.isNotificationsOpen) {
+                BackHandler {
+                  homeViewModel.closeNotifications()
+                }
+              } else if (homeState.isAnalyticsOpen) {
                 BackHandler {
                   homeViewModel.closeAnalytics()
                 }
@@ -185,6 +220,26 @@ class MainActivity : ComponentActivity() {
                 onCloseSettings = { homeViewModel.closeSettings() },
                 onOpenAnalytics = { homeViewModel.openAnalytics() },
                 onCloseAnalytics = { homeViewModel.closeAnalytics() },
+                onOpenNotifications = { homeViewModel.openNotifications() },
+                onCloseNotifications = { homeViewModel.closeNotifications() },
+                onMarkNotificationAsRead = { homeViewModel.markNotificationAsRead(it) },
+                onMarkAllNotificationsAsRead = { homeViewModel.markAllNotificationsAsRead() },
+                onClearAllNotifications = { homeViewModel.clearAllNotifications() },
+                onDeleteNotification = { homeViewModel.deleteNotification(it) },
+                onUpdateProfile = { name, bio -> homeViewModel.updateProfile(name, bio) },
+                onOpenEditProfile = { homeViewModel.openEditProfileDialog() },
+                onCloseEditProfile = { homeViewModel.closeEditProfileDialog() },
+                onOpenAbout = { homeViewModel.openAboutDialog() },
+                onCloseAbout = { homeViewModel.closeAboutDialog() },
+                onOpenLicenses = { homeViewModel.openLicensesDialog() },
+                onCloseLicenses = { homeViewModel.closeLicensesDialog() },
+                onSetThemeMode = { homeViewModel.setThemeMode(it) },
+                onSetAccentColor = { homeViewModel.setAccentColor(it) },
+                onSetBackgroundTheme = { homeViewModel.setBackgroundTheme(it) },
+                onSetFontFamily = { homeViewModel.setFontFamily(it) },
+                onSetFontSizeScale = { homeViewModel.setFontSizeScale(it) },
+                onClearCache = { homeViewModel.clearCache() },
+                onOptimizeThumbnails = { homeViewModel.optimizeThumbnails() },
                 onShowToast = { homeViewModel.showToast(it) },
                 onDismissToast = { homeViewModel.dismissToast() }
               )
