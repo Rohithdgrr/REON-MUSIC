@@ -1,0 +1,6 @@
+{
+  "name": "Reon Music",
+  "description": "Now playing music player with dynamic bento grid layout and electric blue aesthetic.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
