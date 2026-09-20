@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.io.IOException
 
 /**
@@ -168,6 +169,8 @@ class MusicRepository(
 
     // ---- public API ----
 
+    private fun isNetworkError(e: Throwable): Boolean = e is IOException || e is HttpException
+
     suspend fun search(query: String, filter: String?): SearchResponse {
         return try {
             val result = api.search(query, filter?.lowercase()?.takeIf { it != "all" })
@@ -176,6 +179,10 @@ class MusicRepository(
             result
         } catch (e: IOException) {
             fallbackSearchFull(query, filter)
+        } catch (e: HttpException) {
+            // 5xx/429 fall back to offline, 4xx return empty
+            if (e.code() in 500..599 || e.code() == 429) fallbackSearchFull(query, filter)
+            else SearchResponse()
         }
     }
 
@@ -183,6 +190,10 @@ class MusicRepository(
         return try {
             api.suggestions(query)
         } catch (e: IOException) {
+            SuggestionsResponse(emptyList())
+        } catch (e: HttpException) {
+            SuggestionsResponse(emptyList())
+        } catch (_: Exception) {
             SuggestionsResponse(emptyList())
         }
     }
@@ -198,6 +209,9 @@ class MusicRepository(
             res
         } catch (e: IOException) {
             fallbackHome()
+        } catch (e: HttpException) {
+            if (e.code() in 500..599 || e.code() == 429) fallbackHome()
+            else HomeResponse(emptyList())
         }
     }
 
@@ -206,6 +220,15 @@ class MusicRepository(
             api.album(id)
         } catch (e: IOException) {
             // fallback to Room album + tracks with that album name
+            val allAlbums = dao.getAllAlbumsFlow().first()
+            val found = allAlbums.firstOrNull { it.id == id }
+                ?: throw e
+            val tracks = dao.getAllTracks().filter { it.album == found.title }.map { it.toTrackDto() }
+            AlbumDetails(
+                album = com.reon.music.data.remote.AlbumDto(id = found.id, title = found.title, artist = found.artist, year = found.year, trackCount = found.trackCount, artUrl = ""),
+                tracks = tracks,
+            )
+        } catch (e: HttpException) {
             val allAlbums = dao.getAllAlbumsFlow().first()
             val found = allAlbums.firstOrNull { it.id == id }
                 ?: throw e
@@ -231,6 +254,17 @@ class MusicRepository(
                 topTracks = topTracks,
                 albums = albums,
             )
+        } catch (e: HttpException) {
+            val allArtists = dao.getAllArtistsFlow().first()
+            val found = allArtists.firstOrNull { it.id == id } ?: throw e
+            val topTracks = dao.getAllTracks().filter { it.artist == found.name }.take(5).map { it.toTrackDto() }
+            val allAlbums = dao.getAllAlbumsFlow().first()
+            val albums = allAlbums.filter { it.artist == found.name }.map { com.reon.music.data.remote.AlbumDto(it.id, it.title, it.artist, it.year, it.trackCount, "") }
+            ArtistDetails(
+                artist = com.reon.music.data.remote.ArtistDto(id = found.id, name = found.name, genre = found.genre, artUrl = ""),
+                topTracks = topTracks,
+                albums = albums,
+            )
         }
     }
 
@@ -238,6 +272,14 @@ class MusicRepository(
         return try {
             api.playlist(id)
         } catch (e: IOException) {
+            val allPlaylists = dao.getAllPlaylistsFlow().first()
+            val found = allPlaylists.firstOrNull { it.id == id } ?: throw e
+            val tracks = dao.getAllTracks().take(6).map { it.toTrackDto() }
+            PlaylistDetails(
+                playlist = com.reon.music.data.remote.PlaylistDto(id = found.id, title = found.title, subtitle = found.subtitle, trackCount = found.trackCount, artUrl = ""),
+                tracks = tracks,
+            )
+        } catch (e: HttpException) {
             val allPlaylists = dao.getAllPlaylistsFlow().first()
             val found = allPlaylists.firstOrNull { it.id == id } ?: throw e
             val tracks = dao.getAllTracks().take(6).map { it.toTrackDto() }
@@ -254,14 +296,20 @@ class MusicRepository(
         } catch (e: IOException) {
             val tracks = dao.getAllTracks().shuffled().take(8).map { it.toTrackDto() }
             RadioResponse(seedTrackId = trackId, tracks = tracks)
+        } catch (e: HttpException) {
+            val tracks = dao.getAllTracks().shuffled().take(8).map { it.toTrackDto() }
+            RadioResponse(seedTrackId = trackId, tracks = tracks)
         }
     }
 
     /**
      * Resolve stream URL, using cached Room value if not expired (60s margin).
      * On cache hit, returns synthetic StreamResponse without network.
+     * Handles both IOException (offline) and HttpException (502 cipher etc) with graceful fallback.
+     * Tries quality fallback high->medium->low if backend returns 502.
      */
     suspend fun stream(trackId: String, quality: String = "high"): StreamResponse {
+        require(trackId.isNotBlank()) { "trackId blank" }
         // check cache first
         val cached = withContext(io) {
             dao.getTrackById(trackId) ?: dao.getTrackByVideoId(trackId)
@@ -288,42 +336,123 @@ class MusicRepository(
                 )
             }
         }
-        // fetch fresh
-        val fresh = try {
-            api.stream(trackId, quality)
-        } catch (e: IOException) {
-            // if offline and we have expired cache, still return it as last resort
-            if (cached?.streamUrl != null) {
-                val codec = when {
-                    cached.codec.contains("opus", true) -> "opus"
-                    cached.codec.contains("aac", true) -> "aac"
-                    else -> "opus"
+
+        // helper to attempt one quality
+        suspend fun tryQuality(q: String): StreamResponse = api.stream(trackId, q)
+
+        // fetch fresh with fallback qualities on server errors
+        val qualities = when (quality.lowercase()) {
+            "high" -> listOf("high", "medium", "low")
+            "medium" -> listOf("medium", "high", "low")
+            else -> listOf(quality, "high", "medium")
+        }.distinct()
+
+        var lastError: Exception? = null
+        var fresh: StreamResponse? = null
+        for (q in qualities) {
+            try {
+                fresh = tryQuality(q)
+                break
+            } catch (e: IOException) {
+                lastError = e
+                // if we have expired cached URL, return it as last resort for offline
+                if (cached?.streamUrl != null) {
+                    val codec = when {
+                        cached.codec.contains("opus", true) -> "opus"
+                        cached.codec.contains("aac", true) -> "aac"
+                        else -> "opus"
+                    }
+                    return StreamResponse(
+                        url = cached.streamUrl,
+                        codec = codec,
+                        bitrate = 160_000,
+                        expiresAt = cached.streamExpiresAt,
+                        quality = q,
+                    )
                 }
-                return StreamResponse(
-                    url = cached.streamUrl,
-                    codec = codec,
-                    bitrate = 160_000,
-                    expiresAt = cached.streamExpiresAt,
-                    quality = quality,
-                )
+                // For IOException, don't try other qualities — network offline, break
+                throw e
+            } catch (e: HttpException) {
+                lastError = e
+                val code = e.code()
+                // Retry other qualities only for gateway/cipher errors
+                if (code == 502 || code == 500 || code == 429 || code == 503) {
+                    // if last quality, try fallback to cached expired if available
+                    if (q == qualities.last() && cached?.streamUrl != null) {
+                        val codec = when {
+                            cached.codec.contains("opus", true) -> "opus"
+                            cached.codec.contains("aac", true) -> "aac"
+                            else -> "opus"
+                        }
+                        return StreamResponse(
+                            url = cached.streamUrl,
+                            codec = codec,
+                            bitrate = 160_000,
+                            expiresAt = cached.streamExpiresAt,
+                            quality = q,
+                        )
+                    }
+                    // otherwise try next quality
+                    continue
+                }
+                // 4xx -> not retryable
+                if (cached?.streamUrl != null) {
+                    val codec = when {
+                        cached.codec.contains("opus", true) -> "opus"
+                        cached.codec.contains("aac", true) -> "aac"
+                        else -> "opus"
+                    }
+                    return StreamResponse(
+                        url = cached.streamUrl,
+                        codec = codec,
+                        bitrate = 160_000,
+                        expiresAt = cached.streamExpiresAt,
+                        quality = q,
+                    )
+                }
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+                continue
             }
-            throw e
         }
+        val result = fresh ?: throw lastError ?: IOException("stream failed for $trackId")
         // persist
         withContext(io) {
             val targetId = cached?.id ?: trackId
-            // ensure entity exists; if not, we don't insert here (search already inserted). Just update if exists.
             if (cached != null) {
-                dao.updateStream(targetId, fresh.url, fresh.expiresAt)
-                // also update codec/quality fields to reflect enforced YT labels if needed
-                // We keep codec as human-readable but update underlying stored codec for badge correctness
+                dao.updateStream(targetId, result.url, result.expiresAt)
             } else {
-                // Optionally insert a minimal YT entity for this trackId so future cache hits work
-                // We don't have title/artist, so skip insert — stream cache is enough via expiresAt check on next call will miss.
-                // Instead we could insert via DAO with minimal fields, but avoid polluting DB with unknown metadata.
+                // Insert minimal YT entity so future cache hits work (title unknown -> use id)
+                try {
+                    val minimal = TrackEntity(
+                        id = trackId,
+                        title = trackId,
+                        artist = "",
+                        album = "",
+                        category = "YT Stream",
+                        durationMs = 0L,
+                        albumArtUrl = "",
+                        artistImageUrl = "",
+                        source = "YT Stream",
+                        quality = "Opus · 160kbps",
+                        spatialMode = "Stereo",
+                        codec = result.codec.ifBlank { "Opus" },
+                        sampleRate = "48kHz",
+                        monthlyListeners = "",
+                        lyricsQuote = "",
+                        badge = result.codec.ifBlank { "Opus" },
+                        artSeed = (trackId.hashCode().and(0x7fffffff) % 900) + 100,
+                        videoId = trackId,
+                        sourceKind = SourceKind.YT_STREAM,
+                        streamUrl = result.url,
+                        streamExpiresAt = result.expiresAt,
+                    )
+                    dao.insertTracks(listOf(minimal))
+                } catch (_: Exception) { /* ignore */ }
             }
         }
-        return fresh
+        return result
     }
 
     suspend fun player(trackId: String): PlayerResponse {

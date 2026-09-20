@@ -42,6 +42,7 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
 
     private var mediaController: MediaController? = null
     private var positionPollJob: Job? = null
+    private var pendingPlayIndex: Int? = null
 
     init {
         loadTracksFromDb()
@@ -53,6 +54,13 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
         controller.addListener(mediaListener)
         startPositionPoll()
         updateFromController()
+        // If user tapped track before controller was ready, play it now
+        pendingPlayIndex?.let { idx ->
+            pendingPlayIndex = null
+            if (idx in allTracks.indices) {
+                viewModelScope.launch { resolveAndPlay(allTracks[idx]) }
+            }
+        }
     }
 
     fun releaseMediaController() {
@@ -64,7 +72,13 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
 
     private val mediaListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            _uiState.update { it.copy(isPlaying = playbackState == Player.STATE_READY && mediaController?.isPlaying == true) }
+            val playing = playbackState == Player.STATE_READY && mediaController?.isPlaying == true
+                    || playbackState == Player.STATE_BUFFERING && mediaController?.isPlaying == true
+            _uiState.update { it.copy(isPlaying = playing) }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _uiState.update { it.copy(isPlaying = isPlaying) }
         }
 
         override fun onPositionDiscontinuity(reason: Int) {
@@ -72,7 +86,18 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-            _uiState.update { it.copy(toastMessage = "Playback error, retrying...") }
+            val msg = error.message ?: "unknown"
+            // Auto retry on stream expiry (403/410) by re-resolving
+            if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                msg.contains("403", true) || msg.contains("410", true)) {
+                _uiState.update { it.copy(toastMessage = "Stream expired, re-resolving...") }
+                viewModelScope.launch {
+                    val current = _uiState.value.currentTrack
+                    resolveAndPlay(current)
+                }
+            } else {
+                _uiState.update { it.copy(toastMessage = "Playback error, retrying... ($msg)") }
+            }
         }
     }
 
@@ -375,33 +400,58 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
             )
         }
 
+        // If track is local hires mock with no videoId, don't attempt network stream
+        val streamId = track.videoId.takeIf { it.isNotBlank() } ?: track.id
+        val isLocalMock = track.sourceKind == com.reon.music.data.SourceKind.LOCAL_HIRES && track.videoId.isBlank() && !track.id.matches(Regex("[A-Za-z0-9_-]{11}"))
+        if (isLocalMock) {
+            _uiState.update { it.copy(toastMessage = "Local preview – search for '${track.title}' to stream", isPlaying = false) }
+            return
+        }
+
         // Trigger actual audio playback via MediaController
         if (mediaController != null) {
             viewModelScope.launch {
                 resolveAndPlay(track)
             }
+        } else {
+            // Queue until controller binds (MainActivity LaunchedEffect)
+            pendingPlayIndex = index
+            _uiState.update { it.copy(toastMessage = "Queuing '${track.title}'...") }
         }
     }
 
     /**
      * Resolve a stream URL for the given track via the backend,
      * then set it as the MediaItem on ExoPlayer and start playback.
+     * Retries with quality fallback already handled in repository.stream.
      */
     private suspend fun resolveAndPlay(track: MusicTrack) {
-        val ctrl = mediaController ?: return
+        val ctrl = mediaController ?: run {
+            pendingPlayIndex = allTracks.indexOfFirst { it.id == track.id }.takeIf { it >= 0 }
+            return
+        }
+        // Don't stream LOCAL_HIRES mock without real videoId
+        if (track.sourceKind == com.reon.music.data.SourceKind.LOCAL_HIRES && track.videoId.isBlank() && !track.id.matches(Regex("[A-Za-z0-9_-]{11}"))) {
+            _uiState.update { it.copy(toastMessage = "Local preview – search to stream", isPlaying = false) }
+            return
+        }
         try {
-            // Determine which ID to use for stream resolution
             val streamId = track.videoId.takeIf { it.isNotBlank() } ?: track.id
 
+            _uiState.update { it.copy(isLoading = true) }
             val streamResult = repository.stream(streamId, "high")
             val url = streamResult.url
             if (url.isNullOrBlank()) {
-                _uiState.update { it.copy(toastMessage = "Stream URL unavailable for '${track.title}'") }
+                _uiState.update { it.copy(toastMessage = "Stream URL unavailable for '${track.title}'", isLoading = false, isPlaying = false) }
                 return
             }
 
             // Persist the resolved URL so it can be reused without re-resolving
-            dao.updateStream(track.id, url, streamResult.expiresAt)
+            try { dao.updateStream(track.id, url, streamResult.expiresAt) } catch (_: Exception) {}
+            // also store under videoId if different
+            if (track.videoId.isNotBlank() && track.videoId != track.id) {
+                try { dao.updateStream(track.videoId, url, streamResult.expiresAt) } catch (_: Exception) {}
+            }
 
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
@@ -419,14 +469,26 @@ class NowPlayingViewModel(application: Application) : AndroidViewModel(applicati
                 ctrl.prepare()
                 ctrl.playWhenReady = true
             }
+            _uiState.update { it.copy(isLoading = false, toastMessage = "Streaming '${track.title}' • ${streamResult.codec} • ${streamResult.bitrate/1000}kbps") }
 
             // Ensure the foreground service + notification is active
             val intent = Intent(getApplication(), PlaybackService::class.java).apply {
                 action = ACTION_RESTORE
             }
             getApplication<Application>().startForegroundService(intent)
+        } catch (e: retrofit2.HttpException) {
+            val code = e.code()
+            val msg = when (code) {
+                502 -> "Stream ciphered/unavailable (try another track)"
+                429 -> "Rate limited, try again"
+                404 -> "Track not found"
+                else -> "Server error $code"
+            }
+            _uiState.update { it.copy(toastMessage = "Playback failed: $msg", isLoading = false, isPlaying = false) }
+        } catch (e: java.io.IOException) {
+            _uiState.update { it.copy(toastMessage = "Offline – no cached stream for '${track.title}'", isLoading = false, isPlaying = false) }
         } catch (e: Exception) {
-            _uiState.update { it.copy(toastMessage = "Playback error: ${e.message ?: "unknown"}") }
+            _uiState.update { it.copy(toastMessage = "Playback error: ${e.message ?: "unknown"}", isLoading = false, isPlaying = false) }
         }
     }
 

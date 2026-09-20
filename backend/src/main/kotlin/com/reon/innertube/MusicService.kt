@@ -70,29 +70,57 @@ class MusicService(
     }
 
     suspend fun streamJson(trackId: String, quality: String): String = cached(CacheType.STREAM, "$trackId|$quality") {
-        val player = tryPlayer(trackId)
-        val formats = Parsers.rawFormats(player)
-        val picked = Parsers.pickFormat(formats, quality)
-            ?: if (Parsers.hasCipheredOnly(player)) {
+        // Try multiple clients (ANDROID_MUSIC, ANDROID, IOS, WEB, etc.) to bypass LOGIN_REQUIRED/PO token
+        val playerResponses = tube.playerWithFallback(trackId)
+        if (playerResponses.isEmpty()) throw UpstreamException("NO_STREAM", "no player response for $trackId")
+
+        // Collect playable formats from all successful clients
+        val allFormats = playerResponses.flatMap { Parsers.rawFormats(it) }.distinctBy { it.url }
+
+        val picked = if (allFormats.isNotEmpty()) {
+            Parsers.pickFormat(allFormats, quality) ?: Parsers.pickFormat(allFormats, "high")
+        } else null
+
+        if (picked != null) {
+            encode(
+                StreamResponse(
+                    url = picked.url,
+                    codec = Parsers.codecOf(picked.mime),
+                    bitrate = picked.bitrate,
+                    expires_at = Parsers.expireOf(picked.url),
+                    quality = quality,
+                ),
+            )
+        } else {
+            // Check ciphered-only on any client
+            val hasCiphered = playerResponses.any { Parsers.hasCipheredOnly(it) }
+            if (hasCiphered) {
                 throw UpstreamException("STREAM_CIPHERED", "stream requires signature decipher (Phase 4)")
-            } else {
-                throw UpstreamException("NO_STREAM", "no playable audio format for $trackId")
             }
-        encode(
-            StreamResponse(
-                url = picked.url,
-                codec = Parsers.codecOf(picked.mime),
-                bitrate = picked.bitrate,
-                expires_at = Parsers.expireOf(picked.url),
-                quality = quality,
-            ),
-        )
+            // Check LOGIN_REQUIRED / UNPLAYABLE
+            // If all are LOGIN_REQUIRED, surface as auth
+            val anyOk = playerResponses.any { Parsers.playability(it).first == "OK" }
+            if (!anyOk) {
+                val firstAuth = playerResponses.firstOrNull { Parsers.playability(it).first == "LOGIN_REQUIRED" }
+                if (firstAuth != null) {
+                    val (_, reason) = Parsers.playability(firstAuth)
+                    throw UpstreamException("UPSTREAM_AUTH", reason.ifEmpty { "login required" })
+                }
+                val firstUnplayable = playerResponses.firstOrNull { Parsers.playability(it).first != "OK" && Parsers.playability(it).first != "UNKNOWN" }
+                if (firstUnplayable != null) {
+                    val (status, reason) = Parsers.playability(firstUnplayable)
+                    throw UpstreamException("UNPLAYABLE", reason.ifEmpty { "status=$status" })
+                }
+            }
+            throw UpstreamException("NO_STREAM", "no playable audio format for $trackId")
+        }
     }
 
     suspend fun playerJson(trackId: String): String = cached(CacheType.PLAYER, trackId) {
-        val player = tryPlayer(trackId)
+        val responses = tube.playerWithFallback(trackId)
+        val player = responses.firstOrNull { Parsers.playability(it).first == "OK" } ?: responses.firstOrNull() ?: tryPlayer(trackId)
         val (title, artist, durationMs) = Parsers.videoMeta(player)
-        val best = Parsers.pickFormat(Parsers.rawFormats(player), "high")
+        val best = responses.flatMap { Parsers.rawFormats(it) }.let { Parsers.pickFormat(it, "high") } ?: Parsers.pickFormat(Parsers.rawFormats(player), "high")
         encode(
             PlayerResponse(
                 trackId = trackId,
@@ -116,12 +144,17 @@ class MusicService(
 
     /** ANDROID_MUSIC first, WEB_REMIX fallback. Enforces playability OK. */
     private suspend fun tryPlayer(trackId: String): kotlinx.serialization.json.JsonObject {
-        val android = tube.player(trackId, useAndroid = true)
-        if (Parsers.playability(android).first == "OK" && Parsers.rawFormats(android).isNotEmpty()) return android
-        val web = tube.player(trackId, useAndroid = false)
-        val (status, reason) = Parsers.playability(web)
-        if (status == "LOGIN_REQUIRED") throw UpstreamException("UPSTREAM_AUTH", reason.ifEmpty { "login required" })
-        if (status != "OK") throw UpstreamException("UNPLAYABLE", reason.ifEmpty { "status=$status" })
-        return web
+        val android = try { tube.player(trackId, useAndroid = true) } catch (e: UpstreamException) { null }
+        if (android != null && Parsers.playability(android).first == "OK" && Parsers.rawFormats(android).isNotEmpty()) return android
+        val web = try { tube.player(trackId, useAndroid = false) } catch (e: UpstreamException) { null }
+        if (web != null) {
+            val (status, reason) = Parsers.playability(web)
+            if (status == "LOGIN_REQUIRED") throw UpstreamException("UPSTREAM_AUTH", reason.ifEmpty { "login required" })
+            if (status == "OK" && Parsers.rawFormats(web).isNotEmpty()) return web
+            if (status != "OK" && status != "UNKNOWN") throw UpstreamException("UNPLAYABLE", reason.ifEmpty { "status=$status" })
+            if (Parsers.rawFormats(web).isNotEmpty()) return web
+        }
+        // Return whichever we have, caller will inspect cipher/no-stream
+        return android ?: web ?: throw UpstreamException("UNPLAYABLE", "both players failed for $trackId")
     }
 }

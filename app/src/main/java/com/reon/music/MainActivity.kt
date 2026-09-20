@@ -27,6 +27,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.reon.music.playback.PlaybackService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.reon.music.ui.HomeScreen
 import com.reon.music.ui.HomeViewModel
 import com.reon.music.ui.NowPlayingScreen
@@ -76,16 +78,28 @@ class MainActivity : ComponentActivity() {
         ) {
           DisposableEffect(Unit) {
             onDispose {
-              mediaController?.release()
+              try {
+                mediaController?.release()
+              } catch (_: Exception) {}
               mediaController = null
               nowPlayingViewModel?.releaseMediaController()
             }
           }
           LaunchedEffect(Unit) {
             val token = SessionToken(this@MainActivity, ComponentName(this@MainActivity, PlaybackService::class.java))
-            val controller = MediaController.Builder(this@MainActivity, token).buildAsync().get()
-            mediaController = controller
-            nowPlayingViewModel?.setMediaController(controller)
+            // Never block main thread with Future.get() — offload to IO and handle errors
+            val controller = try {
+              withContext(Dispatchers.IO) {
+                MediaController.Builder(this@MainActivity, token).buildAsync().get()
+              }
+            } catch (e: Exception) {
+              android.util.Log.e("REON", "MediaController build failed", e)
+              null
+            }
+            if (controller != null) {
+              mediaController = controller
+              nowPlayingViewModel?.setMediaController(controller)
+            }
           }
           AnimatedContent(
             targetState = homeState.showNowPlayingScreen,

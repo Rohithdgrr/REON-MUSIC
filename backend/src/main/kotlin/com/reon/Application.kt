@@ -25,7 +25,7 @@ import org.slf4j.event.Level
 
 fun main() {
     val config = ReonConfig()
-    embeddedServer(Netty, port = config.port, module = { module(config) }).start(wait = true)
+    embeddedServer(Netty, host = "0.0.0.0", port = config.port, module = { module(config) }).start(wait = true)
 }
 
 fun Application.module(config: ReonConfig = ReonConfig()) {

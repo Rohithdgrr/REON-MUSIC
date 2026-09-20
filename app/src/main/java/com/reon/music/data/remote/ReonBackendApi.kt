@@ -84,15 +84,19 @@ interface ReonBackendApi {
                     builder.header("X-Reon-Key", apiKey)
                 }
                 builder.header("Accept", "application/json")
+                // Use Connection: close to avoid pooled-connection issues via adb reverse / emulator NAT
+                builder.header("Connection", "close")
                 chain.proceed(builder.build())
             }
             return OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
                 .writeTimeout(10, TimeUnit.SECONDS)
+                .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
                 .addInterceptor(apiKeyInterceptor)
                 .addInterceptor(logging)
                 .retryOnConnectionFailure(true)
+                .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
                 .build()
         }
 
