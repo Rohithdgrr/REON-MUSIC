@@ -1,11 +1,11 @@
-# REON — Ultra High-Fidelity Lossless Music Engine for Android
+# REON — Android Music Client (Compose M3) + Thin Backend Proxy
 
 <p align="center">
   <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="120" height="120" alt="REON Music Core Logo" />
 </p>
 
 <p align="center">
-  <strong>Bit-Perfect Audio Pipeline • 24-bit / 192kHz Lossless FLAC • 3D HRTF Spatial DSP • Jetpack Compose Material Design 3</strong>
+  <strong>Jetpack Compose Material Design 3 • Thin Ktor Backend Proxy • Media3 Playback (in progress)</strong>
 </p>
 
 <p align="center">
@@ -18,21 +18,21 @@
 
 ---
 
-## 🎧 Overview
+## 🎧 Overview — honest MVP status (Phase 0)
 
-**REON** is a state-of-the-art Android music player and audio engine crafted for true audiophiles, music collectors, and high-fidelity sound engineers. Built from the ground up using **Kotlin**, **Jetpack Compose (Material Design 3)**, and a **64-bit Floating-Point DSP bus**, REON delivers an uncompromising acoustic listening experience.
+**REON** is currently a **Compose UI prototype with a Room-backed mock catalog**, being converted into a working client. Package is `com.reon.music`. There is **no real playback, no network use, and no `MusicRepository` yet** — see `phasewiseplan.md`, `todolist.md`, `tasks.md` for the salvage path.
 
-Whether streaming studio-master FLAC tracks, driving external high-end USB DACs with bit-perfect bypass, customizing visual canvas tones, or analyzing acoustic listening spectrums, REON provides professional-grade audio fidelity with fluid modern aesthetics.
+Direction (locked): thin anonymous Ktor proxy in `backend/` (in-memory cache, no Redis/Postgres in v1), app talks backend-only with Room offline fallback, data-layer first, `LOCAL_HIRES` vs `YT_STREAM` split labeling (YouTube streams are Opus/AAC 128–160kbps and are never labeled FLAC/Hi-Res), NewPipeExtractor deferred to fallback only. Private/self-host use only.
+
+Hi-Res/bit-perfect/USB-DAC/DSD/Atmos goals remain **future work** and must be measured before re-claiming. Do not market YT streams as lossless.
 
 ---
 
 ## ✨ Key Features & Capabilities
 
-### 🎛️ 1. Hyper-Fidelity Audio Engine & DSP
-- **Bit-Perfect Pipeline**: Bypasses Android's default resampling layer for direct, bit-accurate digital-to-analog conversion over USB DACs.
-- **Master Audio Codec Support**: Native decoding for 24-bit/192kHz FLAC, ALAC, WAV, and DSD256.
-- **3D HRTF Spatial Audio**: Binaural spatial simulation and Dolby Atmos preset integration for multidimensional acoustic stage placement.
-- **Gapless & Crossfade**: Zero-latency transitions between consecutive tracks with configurable 0–12s crossfade duration and smart automixing.
+### 🎛️ 1. Audio Engine & DSP — current vs planned
+- **Now (prototype):** mock `NowPlayingViewModel` timer, no ExoPlayer/Media3, no DSP, no gapless/crossfade.
+- **Next (Phase 3):** Media3 `MediaSessionService` + ExoPlayer background playback, audio focus, re-resolve on URL expiry. Hi-Res local files (`LOCAL_HIRES`) tracked separately from `YT_STREAM` (Opus/AAC).
 
 ### 🎨 2. Comprehensive UI/UX Customization
 - **Theme Modes**: Seamless switching between **System Default**, **Light**, **Obsidian Dark (Deep Focus UI)**, and pure **OLED Pitch Black**.
@@ -47,14 +47,9 @@ Whether streaming studio-master FLAC tracks, driving external high-end USB DACs 
 - **Custom Typography**: Select from **Plus Jakarta Sans** (Modern Geometric), **Inter** (Clean), **Technical Monospace**, or **Editorial Serif**.
 - **Text Size Scaling**: Adjustable global UI scale slider from 90% (Compact) to 120% (Extra Large).
 
-### 📱 3. Feature-Packed Screen Ecosystem
-- **Now Playing Studio**: Full-screen interactive player with real-time waveform progress visualizer, synchronized karaoke lyrics viewer, queue manager, sleep timer, and spatial sound switch.
-- **Interactive Home Feed**: Dynamic daily greeting, Continue Listening hero banner, High-Res Daily Highlights, Curated Moods, Audio Quality telemetry badges, and mini-player dock.
-- **Smart Search & Filters**: Search catalog with instant codec pills (Lossless, Hi-Res 24-bit, Studio Master, Spatial Atmos, DSD), recent query chips, and voice search simulation.
-- **Offline Downloads Core**: Multi-track download manager, offline storage breakdown visualizer, Wi-Fi-only safety toggles, and auto-sync queue.
-- **Acoustic Analytics**: Radar listening radar, weekly audio hours graph, top artist affinity breakdown, and average bitrate telemetry.
-- **Notification Feed**: Categorized notification center (Releases, Audio Engine, Downloads, Live Streams, System) with unread badges, mark-all-as-read, and actionable cards.
-- **User Profile & Settings**: Edit user name and audiophile bio, examine audio engine specs, toggle hardware DAC mode, launch GitHub repository, and browse Open Source licenses.
+### 📱 3. Screen Ecosystem — prototype status
+- **Now Playing / Home / Search / Downloads / Analytics / Notifications / Settings / Library screens exist as Compose UI** with mock data (`MusicTrack.sampleTracks`, Room seeds). Search queries local mocks, downloads are boolean flags, lyrics/voice are hardcoded/simulated.
+- **Next:** wire to `backend/` via `ReonBackendApi` + `MusicRepository` (missing — to be created in Phase 2).
 
 ### 🔗 4. Native System Sharing
 - Instant Android `Intent.ACTION_SEND` integration across tracks, artists, albums, playlists, and engine configurations with rich formatted metadata.
@@ -74,10 +69,14 @@ REON is built following modern Android Architecture best practices:
 - **Design System**: Modular `ReonTokens` (Colors, Spacing, Typography, Radius, Shadows)
 
 ```
-app/src/main/java/com/example/
+app/src/main/java/com/reon/music/
 ├── MainActivity.kt                 # Single Activity entry point & theme orchestrator
+├── ReonApplication.kt
 ├── data/
-│   └── MusicRepository.kt          # Hi-Res catalog, tracks, playlists, artist repositories
+│   ├── MusicTrack.kt               # UI model + sampleTracks mock (to be replaced)
+│   ├── ReonDatabase.kt             # Room entities/DAO (v1; v2 adds videoId/sourceKind/stream fields)
+│   └── remote/                     # TO BE CREATED Phase 2: ReonBackendApi.kt, BackendDto.kt, MusicRepository.kt
+├── playback/                       # TO BE CREATED Phase 3: PlaybackService.kt (MediaSessionService + ExoPlayer)
 └── ui/
     ├── HomeScreen.kt               # Central dashboard, tab host, & sub-screen coordinator
     ├── HomeViewModel.kt            # Global application state, filter, customization & notification VM
@@ -111,7 +110,7 @@ app/src/main/java/com/example/
 - Android Studio Ladybug (2024.2+) or newer
 - JDK 17 or JDK 21
 - Android SDK 35 (Android 15)
-- Minimum SDK: Android 8.0 (API 26)
+- Minimum SDK: Android 7.0 (API 24, matches `app/build.gradle.kts`)
 
 ### Build & Run
 1. Clone the repository:
