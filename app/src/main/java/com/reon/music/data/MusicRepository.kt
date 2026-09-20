@@ -35,6 +35,35 @@ class MusicRepository(
 ) {
     val repositoryDao: ReonDao get() = dao
 
+    // Fallback for emulator networking: try 10.0.2.2 then 127.0.0.1 (adb reverse) and vice versa
+    private val fallbackApi: ReonBackendApi by lazy {
+        val primary = ReonBackendApi.resolveBaseUrl()
+        val fallbackBase = if (primary.contains("10.0.2.2")) "http://127.0.0.1:8080" else "http://10.0.2.2:8080"
+        ReonBackendApi.create(baseUrl = fallbackBase, apiKey = ReonBackendApi.resolveApiKey())
+    }
+
+    private fun isEmulatorNetworkError(e: IOException): Boolean {
+        val msg = e.message ?: ""
+        return msg.contains("Failed to connect", true) ||
+            msg.contains("unexpected end of stream", true) ||
+            msg.contains("Unable to resolve host", true) ||
+            msg.contains("Software caused connection abort", true)
+    }
+
+    private suspend fun <T> withFallback(block: suspend (ReonBackendApi) -> T): T {
+        try {
+            return block(api)
+        } catch (e: IOException) {
+            if (isEmulatorNetworkError(e)) {
+                try {
+                    return block(fallbackApi)
+                } catch (_: IOException) {}
+                // also try without fallbackApi's interceptors? just rethrow original
+            }
+            throw e
+        }
+    }
+
     // ---- helpers: labeling enforcement ----
 
     private fun enforceYtCodec(raw: String?): String = when {
@@ -173,7 +202,7 @@ class MusicRepository(
 
     suspend fun search(query: String, filter: String?): SearchResponse {
         return try {
-            val result = api.search(query, filter?.lowercase()?.takeIf { it != "all" })
+            val result = withFallback { it.search(query, filter?.lowercase()?.takeIf { it != "all" }) }
             // write-through for next offline use
             try { persistSearchResult(result) } catch (_: Exception) { /* ignore persist failures */ }
             result
@@ -188,7 +217,7 @@ class MusicRepository(
 
     suspend fun suggestions(query: String): SuggestionsResponse {
         return try {
-            api.suggestions(query)
+            withFallback { it.suggestions(query) }
         } catch (e: IOException) {
             SuggestionsResponse(emptyList())
         } catch (e: HttpException) {
@@ -200,7 +229,7 @@ class MusicRepository(
 
     suspend fun home(): HomeResponse {
         return try {
-            val res = api.home()
+            val res = withFallback { it.home() }
             // persist first section's items as YT cache
             try {
                 val all = res.sections.flatMap { it.items }
@@ -217,7 +246,7 @@ class MusicRepository(
 
     suspend fun album(id: String): AlbumDetails {
         return try {
-            api.album(id)
+            withFallback { it.album(id) }
         } catch (e: IOException) {
             // fallback to Room album + tracks with that album name
             val allAlbums = dao.getAllAlbumsFlow().first()
@@ -242,7 +271,7 @@ class MusicRepository(
 
     suspend fun artist(id: String): ArtistDetails {
         return try {
-            api.artist(id)
+            withFallback { it.artist(id) }
         } catch (e: IOException) {
             val allArtists = dao.getAllArtistsFlow().first()
             val found = allArtists.firstOrNull { it.id == id } ?: throw e
@@ -270,7 +299,7 @@ class MusicRepository(
 
     suspend fun playlist(id: String): PlaylistDetails {
         return try {
-            api.playlist(id)
+            withFallback { it.playlist(id) }
         } catch (e: IOException) {
             val allPlaylists = dao.getAllPlaylistsFlow().first()
             val found = allPlaylists.firstOrNull { it.id == id } ?: throw e
@@ -292,7 +321,7 @@ class MusicRepository(
 
     suspend fun radio(trackId: String): RadioResponse {
         return try {
-            api.radio(trackId)
+            withFallback { it.radio(trackId) }
         } catch (e: IOException) {
             val tracks = dao.getAllTracks().shuffled().take(8).map { it.toTrackDto() }
             RadioResponse(seedTrackId = trackId, tracks = tracks)
@@ -337,8 +366,8 @@ class MusicRepository(
             }
         }
 
-        // helper to attempt one quality
-        suspend fun tryQuality(q: String): StreamResponse = api.stream(trackId, q)
+        // helper to attempt one quality with emulator fallback (10.0.2.2 <-> 127.0.0.1)
+        suspend fun tryQuality(q: String): StreamResponse = withFallback { it.stream(trackId, q) }
 
         // fetch fresh with fallback qualities on server errors
         val qualities = when (quality.lowercase()) {
@@ -457,7 +486,7 @@ class MusicRepository(
 
     suspend fun player(trackId: String): PlayerResponse {
         return try {
-            api.player(trackId)
+            withFallback { it.player(trackId) }
         } catch (e: IOException) {
             val cached = dao.getTrackById(trackId) ?: dao.getTrackByVideoId(trackId) ?: throw e
             PlayerResponse(
@@ -474,7 +503,7 @@ class MusicRepository(
 
     suspend fun lyrics(trackId: String): LyricsResponse {
         return try {
-            api.lyrics(trackId)
+            withFallback { it.lyrics(trackId) }
         } catch (e: IOException) {
             val cached = dao.getTrackById(trackId) ?: dao.getTrackByVideoId(trackId)
             LyricsResponse(trackId = trackId, text = cached?.lyricsQuote ?: "", synced = false)
