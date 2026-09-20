@@ -35,11 +35,27 @@ class MusicRepository(
 ) {
     val repositoryDao: ReonDao get() = dao
 
-    // Fallback for emulator networking: try 10.0.2.2 then 127.0.0.1 (adb reverse) and vice versa
-    private val fallbackApi: ReonBackendApi by lazy {
+    // Fallback for emulator networking: try 10.0.2.2, 127.0.0.1 (adb reverse), and host LAN IPs
+    private val fallbackApis: List<ReonBackendApi> by lazy {
         val primary = ReonBackendApi.resolveBaseUrl()
-        val fallbackBase = if (primary.contains("10.0.2.2")) "http://127.0.0.1:8080" else "http://10.0.2.2:8080"
-        ReonBackendApi.create(baseUrl = fallbackBase, apiKey = ReonBackendApi.resolveApiKey())
+        val candidates = mutableListOf<String>()
+        // Primary is already tried, so fallbacks are the others
+        val allBases = listOf(
+            "http://10.0.2.2:8080",
+            "http://127.0.0.1:8080",
+            "http://10.76.209.211:8080",
+            "http://172.16.0.2:8080",
+            "http://172.27.128.1:8080"
+        )
+        for (base in allBases) {
+            if (!primary.contains(base.substringAfter("://").substringBefore(":")) && base != primary) {
+                candidates.add(base)
+            }
+        }
+        // Also add the opposite of primary as first fallback
+        val firstFallback = if (primary.contains("10.0.2.2")) "http://127.0.0.1:8080" else "http://10.0.2.2:8080"
+        val ordered = (listOf(firstFallback) + candidates).distinct().filter { it != primary }
+        ordered.map { ReonBackendApi.create(baseUrl = it, apiKey = ReonBackendApi.resolveApiKey()) }
     }
 
     private fun isEmulatorNetworkError(e: IOException): Boolean {
@@ -47,7 +63,9 @@ class MusicRepository(
         return msg.contains("Failed to connect", true) ||
             msg.contains("unexpected end of stream", true) ||
             msg.contains("Unable to resolve host", true) ||
-            msg.contains("Software caused connection abort", true)
+            msg.contains("Software caused connection abort", true) ||
+            msg.contains("Connection reset", true) ||
+            msg.contains("Connection refused", true)
     }
 
     private suspend fun <T> withFallback(block: suspend (ReonBackendApi) -> T): T {
@@ -55,10 +73,14 @@ class MusicRepository(
             return block(api)
         } catch (e: IOException) {
             if (isEmulatorNetworkError(e)) {
-                try {
-                    return block(fallbackApi)
-                } catch (_: IOException) {}
-                // also try without fallbackApi's interceptors? just rethrow original
+                for (fallback in fallbackApis) {
+                    try {
+                        return block(fallback)
+                    } catch (fe: IOException) {
+                        if (!isEmulatorNetworkError(fe)) throw fe
+                        // try next fallback
+                    }
+                }
             }
             throw e
         }

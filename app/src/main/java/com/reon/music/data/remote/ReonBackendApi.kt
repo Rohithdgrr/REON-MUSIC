@@ -84,6 +84,8 @@ interface ReonBackendApi {
                     builder.header("X-Reon-Key", apiKey)
                 }
                 builder.header("Accept", "application/json")
+                // Disable Expect: 100-continue which can cause issues via adb reverse / emulator NAT
+                builder.header("Expect", "")
                 chain.proceed(builder.build())
             }
             return OkHttpClient.Builder()
