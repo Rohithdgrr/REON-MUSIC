@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <include domain="sharedpref" path="." />
-    <!-- Account DataStore holds email + YouTube channel IDs: never back up -->
-    <exclude domain="sharedpref" path="accounts.preferences_pb" />
-    <include domain="database" path="." />
-</full-backup-content>
